@@ -5,6 +5,7 @@ import sys
 import pathlib
 import numpy as np
 import pytest
+import gc
 
 
 from skimage import io
@@ -21,7 +22,6 @@ from datetime import datetime
 from functools import wraps
 from timeit import default_timer as timer
 
-# import cv2
 import pandas as pd
 import rawpy
 import scipy
@@ -179,6 +179,7 @@ def test_sim_ellipse():
         os.makedirs(output_directory)
     
     try:
+        gc.collect()
         df = demo.sim_ellipse(output_directory, im_width_px, im_height_px, min_diam_um, max_diam_um, px_per_um, angle_deg)
         pass
 
