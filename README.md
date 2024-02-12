@@ -1,4 +1,9 @@
-﻿# fibermorph
+﻿[![Test](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml/badge.svg)](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml)
+
+![PyPI version](https://img.shields.io/pypi/v/fibermorph.svg)
+
+
+# fibermorph
 
 
 Python package for image analysis of hair curvature and cross-section
