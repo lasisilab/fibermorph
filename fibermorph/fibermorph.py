@@ -1,4 +1,3 @@
-# %% Import libraries
 import argparse
 import datetime
 import os
@@ -11,7 +10,6 @@ from datetime import datetime
 from functools import wraps
 from timeit import default_timer as timer
 
-# import cv2
 import numpy as np
 import pandas as pd
 import rawpy
@@ -32,18 +30,9 @@ from skimage.filters import threshold_minimum
 from skimage.segmentation import clear_border
 from skimage.util import invert
 from tqdm import tqdm
-#%%
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import demo
-
-# Grab version from _version.py in the fibermorph directory
-dir = os.path.dirname(__file__)
-version_py = os.path.join(dir, "_version.py")
-exec(open(version_py).read())
-
-# %% Functions
-
-# parse_args() and timing() listed first for easy updating/access
+from fibermorph import __version__
 
 def parse_args():
     """
@@ -53,6 +42,8 @@ def parse_args():
     Parser argument namespace
     """
     parser = argparse.ArgumentParser(description="fibermorph")
+
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     
     parser.add_argument(
         "-o", "--output_directory", metavar="", default=None,
