@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "fibermorph"
 version = "0.3.2"
@@ -5,6 +9,8 @@ description = "Toolkit for analyzing hair fiber morphology"
 authors = ["tinalasisi <tina.lasisi@gmail.com>"]
 license = "LICENSE"
 readme = "README.md"
+homepage = "https://github.com/lasisilab/fibermorph"
+repository = "https://github.com/lasisilab/fibermorph"
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -24,15 +30,5 @@ sympy = "^1.12"
 pytest = "^8.0.0"
 pyarrow = "^15.0.0"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[project]
-requires-python = ">= 3.11"
-
 [tool.poetry.scripts]
 fibermorph = "fibermorph.fibermorph:main"
-
-[project.urls]
-"Homepage" = "https://github.com/tinalasisi/fibermorph"
