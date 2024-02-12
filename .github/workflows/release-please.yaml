@@ -5,6 +5,10 @@ on:
 
 name: release-please
 
+permissions:
+  contents: write
+  pull-requests: write
+
 env:
   PYTHON_VERSION: 3.11
 
