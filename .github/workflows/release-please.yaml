@@ -22,7 +22,6 @@ jobs:
         id: release
         with:
           release-type: python
-          package-name: snakemake
 
   publish:
     runs-on: ubuntu-latest
