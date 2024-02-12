@@ -40,6 +40,7 @@ jobs:
           if [[ "v$PKG_VERSION" != "$TAG" ]]; then
             echo "Error: Tag ($TAG) does not match the package version (v$PKG_VERSION)."
             exit 1
+          fi
 
       - name: Install Dependencies using Poetry
         run: poetry build
