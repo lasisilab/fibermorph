@@ -219,7 +219,7 @@ def sim_ellipse(output_directory, im_width_px, im_height_px, min_diam_um, max_di
     df.to_csv(df_path)
     
     plt.ioff()
-    fig.savefig(fname=im_path, dpi=dpi)
+    fig.savefig(fname=im_path, dpi=um_per_inch)
     plt.cla()
     plt.close()
     
