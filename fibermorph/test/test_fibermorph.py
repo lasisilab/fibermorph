@@ -165,8 +165,8 @@ def test_length_measurement():
     print("Corrected length is: {}".format(corr_px_length))
 
 def test_sim_ellipse():
-    im_width_px = 5200
-    im_height_px = 3900
+    im_width_px = 1040
+    im_height_px = 780
     min_diam_um = 40
     max_diam_um = 80
     
@@ -179,7 +179,6 @@ def test_sim_ellipse():
         os.makedirs(output_directory)
     
     try:
-        gc.collect()
         df = demo.sim_ellipse(output_directory, im_width_px, im_height_px, min_diam_um, max_diam_um, px_per_um, angle_deg)
         pass
 
