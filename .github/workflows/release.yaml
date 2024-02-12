@@ -36,8 +36,8 @@ jobs:
       - name: Check if tag matches the package version
         run: |
           PKG_VERSION=$(poetry version -s)
-          TAG = ${GITHUB_REF#refs/tags/}
-          if [[ "v$PKG_VERSION" != $TAG ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+          if [[ "v$PKG_VERSION" != "$TAG" ]]; then
             echo "Error: Tag ($TAG) does not match the package version (v$PKG_VERSION)."
             exit 1
 
