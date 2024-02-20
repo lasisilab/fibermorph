@@ -32,3 +32,6 @@ pyarrow = "^15.0.0"
 
 [tool.poetry.scripts]
 fibermorph = "fibermorph.fibermorph:main"
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+

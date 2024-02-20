@@ -30,9 +30,11 @@ from skimage.filters import threshold_minimum
 from skimage.segmentation import clear_border
 from skimage.util import invert
 from tqdm import tqdm
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import demo
 from fibermorph import __version__
+
 
 def parse_args():
     """
@@ -43,75 +45,124 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description="fibermorph")
 
-    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
-    
     parser.add_argument(
-        "-o", "--output_directory", metavar="", default=None,
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output_directory",
+        metavar="",
+        default=None,
         help="Required. Full path to and name of desired output directory. "
-             "Will be created if it doesn't exist.")
-    
+        "Will be created if it doesn't exist.",
+    )
+
     parser.add_argument(
-        "-i", "--input_directory", metavar="", default=None,
+        "-i",
+        "--input_directory",
+        metavar="",
+        default=None,
         help="Required. Full path to and name of desired directory containing "
-             "input files.")
+        "input files.",
+    )
 
     parser.add_argument(
-        "--jobs", type=int, metavar="", default=1,
-        help="Integer. Number of parallel jobs to run. Default is 1.")
+        "--jobs",
+        type=int,
+        metavar="",
+        default=1,
+        help="Integer. Number of parallel jobs to run. Default is 1.",
+    )
 
     parser.add_argument(
-        "-s", "--save_image", action="store_true", default=False,
+        "-s",
+        "--save_image",
+        action="store_true",
+        default=False,
         help="Default is False. Will save intermediate curvature/section processing images if --save_image flag is "
-             "included.")
+        "included.",
+    )
 
     gr_curv = parser.add_argument_group(
         "curvature options", "arguments used specifically for curvature module"
     )
-    
-    gr_curv.add_argument(
-        "--resolution_mm", type=int, metavar="", default=132,
-        help="Integer. Number of pixels per mm for curvature analysis. Default is 132.")
 
     gr_curv.add_argument(
-        "--window_size", metavar="", default=None, nargs='+',
-        help="Float or integer or None. Desired size for window of measurement for curvature analysis in pixels or mm (given "
-             "the flag --window_unit). If nothing is entered, the default is None and the entire hair will be used to for the curve fitting.")
-
-    gr_curv.add_argument(
-        "--window_unit", type=str, default="px", choices=["px", "mm"],
-        help="String. Unit of measurement for window of measurement for curvature analysis. Can be 'px' (pixels) or "
-             "'mm'. Default is 'px'.")
-
-    gr_curv.add_argument(
-        "-W", "--within_element", action="store_true", default=False,
-        help="Boolean. Default is False. Will create an additional directory with spreadsheets of raw curvature "
-             "measurements for each hair if the --within_element flag is included."
+        "--resolution_mm",
+        type=int,
+        metavar="",
+        default=132,
+        help="Integer. Number of pixels per mm for curvature analysis. Default is 132.",
     )
-    
+
+    gr_curv.add_argument(
+        "--window_size",
+        metavar="",
+        default=None,
+        nargs="+",
+        help="Float or integer or None. Desired size for window of measurement for curvature analysis in pixels or mm (given "
+        "the flag --window_unit). If nothing is entered, the default is None and the entire hair will be used to for the curve fitting.",
+    )
+
+    gr_curv.add_argument(
+        "--window_unit",
+        type=str,
+        default="px",
+        choices=["px", "mm"],
+        help="String. Unit of measurement for window of measurement for curvature analysis. Can be 'px' (pixels) or "
+        "'mm'. Default is 'px'.",
+    )
+
+    gr_curv.add_argument(
+        "-W",
+        "--within_element",
+        action="store_true",
+        default=False,
+        help="Boolean. Default is False. Will create an additional directory with spreadsheets of raw curvature "
+        "measurements for each hair if the --within_element flag is included.",
+    )
+
     gr_sect = parser.add_argument_group(
         "section options", "arguments used specifically for section module"
     )
-    
-    gr_sect.add_argument(
-        "--resolution_mu", type=float, metavar="", default=4.25,
-        help="Float. Number of pixels per micron for section analysis. Default is 4.25.")
 
     gr_sect.add_argument(
-        "--minsize", type=int, metavar="", default=20,
-        help="Integer. Minimum diameter in microns for sections. Default is 20.")
+        "--resolution_mu",
+        type=float,
+        metavar="",
+        default=4.25,
+        help="Float. Number of pixels per micron for section analysis. Default is 4.25.",
+    )
 
     gr_sect.add_argument(
-        "--maxsize", type=int, metavar="", default=150,
-        help="Integer. Maximum diameter in microns for sections. Default is 150.")
+        "--minsize",
+        type=int,
+        metavar="",
+        default=20,
+        help="Integer. Minimum diameter in microns for sections. Default is 20.",
+    )
+
+    gr_sect.add_argument(
+        "--maxsize",
+        type=int,
+        metavar="",
+        default=150,
+        help="Integer. Maximum diameter in microns for sections. Default is 150.",
+    )
 
     gr_raw = parser.add_argument_group(
         "raw2gray options", "arguments used specifically for raw2gray module"
     )
-    
+
     gr_raw.add_argument(
-        "--file_extension", type=str, metavar="", default=".RW2",
+        "--file_extension",
+        type=str,
+        metavar="",
+        default=".RW2",
         help="Optional. String. Extension of input files to use in input_directory when using raw2gray function. "
-             "Default is .RW2.")
+        "Default is .RW2.",
+    )
 
     # gr_demo = parser.add_argument_group(
     #     "demo options", "arguments used specifically for section and curvature demo_dummy modules"
@@ -124,30 +175,46 @@ def parse_args():
 
     # Create mutually exclusive flags for each of fibermorph's modules
     group = parser.add_argument_group(
-        "fibermorph module options", "mutually exclusive modules that can be run with the fibermorph package"
+        "fibermorph module options",
+        "mutually exclusive modules that can be run with the fibermorph package",
     )
     module_group = group.add_mutually_exclusive_group(required=True)
-    
+
     module_group.add_argument(
-        "--raw2gray", action="store_true", default=False,
-        help="Convert raw image files to grayscale TIFF files.")
-    
+        "--raw2gray",
+        action="store_true",
+        default=False,
+        help="Convert raw image files to grayscale TIFF files.",
+    )
+
     module_group.add_argument(
-        "--curvature", action="store_true", default=False,
-        help="Analyze curvature in grayscale TIFF images.")
-    
+        "--curvature",
+        action="store_true",
+        default=False,
+        help="Analyze curvature in grayscale TIFF images.",
+    )
+
     module_group.add_argument(
-        "--section", action="store_true", default=False,
-        help="Analyze cross-sections in grayscale TIFF images.")
-    
+        "--section",
+        action="store_true",
+        default=False,
+        help="Analyze cross-sections in grayscale TIFF images.",
+    )
+
     module_group.add_argument(
-        "--demo_real_curv", action="store_true", default=False,
-        help="A demo of fibermorph curvature analysis with real data.")
-    
+        "--demo_real_curv",
+        action="store_true",
+        default=False,
+        help="A demo of fibermorph curvature analysis with real data.",
+    )
+
     module_group.add_argument(
-        "--demo_real_section", action="store_true", default=False,
-        help="A demo of fibermorph section analysis with real data.")
-    
+        "--demo_real_section",
+        action="store_true",
+        default=False,
+        help="A demo of fibermorph section analysis with real data.",
+    )
+
     # module_group.add_argument(
     #     "--demo_dummy_curv", action="store_true", default=False,
     #     help="A demo of fibermorph curvature with dummy data. Arcs and lines are generated, analyzed and error is "
@@ -157,13 +224,13 @@ def parse_args():
     #     "--demo_dummy_section", action="store_true", default=False,
     #     help="A demo of fibermorph section with dummy data. Circles and ellipses are generated, analyzed and error is "
     #          "calculated.")
-    
+
     # module_group.add_argument(
     #     "--delete_dir", action="store_true", default=False,
     #     help="Delete any directory generated in analysis.")
-    
+
     args = parser.parse_args()
-    
+
     # # Validate arguments
     # demo_mods = [
     #     args.demo_real_curv,
@@ -171,12 +238,10 @@ def parse_args():
     #     args.demo_dummy_curv,
     #     args.demo_dummy_section,
     #     args.delete_dir]
-    
+
     # Validate arguments (without dummy data)
-    demo_mods = [
-        args.demo_real_curv,
-        args.demo_real_section]
-    
+    demo_mods = [args.demo_real_curv, args.demo_real_section]
+
     if any(demo_mods) is False:
         if args.input_directory is None and args.output_directory is None:
             sys.exit("ExitError: need both --input_directory and --output_directory")
@@ -184,14 +249,16 @@ def parse_args():
             sys.exit("ExitError: need --input_directory")
         if args.output_directory is None:
             sys.exit("ExitError: need --output_directory")
-    
+
     else:
         if args.output_directory is None:
             sys.exit("ExitError: need --output_directory")
-    
+
     return args
 
-#%%
+
+# %%
+
 
 def timing(f):
     @wraps(f)
@@ -202,25 +269,29 @@ def timing(f):
         te = timeit.default_timer()
         total_time = convert(te - ts)
         print(
-            '\n\nThe function: {} \n\n with args:[{},\n{}] \n\n and result: {} \n\nTotal time: {}\n\n'.format(
-                f.__name__, args, kw, result, total_time))
+            "\n\nThe function: {} \n\n with args:[{},\n{}] \n\n and result: {} \n\nTotal time: {}\n\n".format(
+                f.__name__, args, kw, result, total_time
+            )
+        )
         return result
-    
+
     return wrap
+
 
 def blockPrint(f):
     @wraps(f)
     def wrap(*args, **kw):
         # block all printing to the console
-        sys.stdout = open(os.devnull, 'w')
+        sys.stdout = open(os.devnull, "w")
         # call the method in question
         value = f(*args, **kw)
         # enable all printing to the console
         sys.stdout = sys.__stdout__
         # pass the return value of the method back
         return value
+
     return wrap
-        
+
 
 # Rest of the functions--organized alphabetically
 
@@ -241,10 +312,10 @@ def copy_if_exist(file, directory):
         True or false depending on whether copying was successful.
 
     """
-    
+
     path = pathlib.Path(file)
     destination = directory
-    
+
     if os.path.isfile(path):
         shutil.copy(path, destination)
         # print('file has been copied'.format(path))
@@ -291,34 +362,35 @@ def make_subdirectory(directory, append_name=""):
         A pathlib object for the subdirectory created.
 
     """
-    
+
     # Define the path of the directory within which this function will make a subdirectory.
     directory = pathlib.Path(directory)
     # The name of the subdirectory.
     append_name = str(append_name)
     # Define the output path by the initial directory and join (i.e. "+") the appropriate text.
     output_path = pathlib.Path(directory).joinpath(str(append_name))
-    
+
     # Use pathlib to see if the output path exists, if it is there it returns True
     if pathlib.Path(output_path).exists() == False:
-        
+
         # Prints a status method to the console using the format option, which fills in the {} with whatever
         # is in the ().
         print(
             "This output path doesn't exist:\n            {} \n Creating...".format(
-                output_path))
-        
+                output_path
+            )
+        )
+
         # Use pathlib to create the folder.
         pathlib.Path.mkdir(output_path, parents=True, exist_ok=True)
-        
+
         # Prints a status to let you know that the folder has been created
         print("Output path has been created")
-    
+
     # Since it's a boolean return, and True is the only other option we will simply print the output.
     else:
         # This will print exactly what you tell it, including the space. The backslash n means new line.
-        print("Output path already exists:\n               {}".format(
-                output_path))
+        print("Output path already exists:\n               {}".format(output_path))
     return output_path
 
 
@@ -340,11 +412,11 @@ def list_images(directory):
     """
     exts = [".tif", ".tiff"]
     mainpath = pathlib.Path(directory)
-    file_list = [p for p in pathlib.Path(mainpath).rglob('*') if p.suffix in exts]
-    
+    file_list = [p for p in pathlib.Path(mainpath).rglob("*") if p.suffix in exts]
+
     list.sort(file_list)  # sort the files
     # print(len(file_list))  # printed the sorted files
-    
+
     return file_list
 
 
@@ -365,7 +437,7 @@ def raw_to_gray(imgfile, output_directory):
         A pathlib object with the path to the converted image file.
 
     """
-    
+
     imgfile = os.path.abspath(imgfile)
     output_directory = output_directory
     basename = os.path.basename(imgfile)
@@ -373,61 +445,95 @@ def raw_to_gray(imgfile, output_directory):
     output_name = pathlib.Path(output_directory).joinpath(name)
     # print("\n\n")
     # print(name)
-    
+
     try:
         with rawpy.imread(imgfile) as raw:
             rgb = raw.postprocess(use_auto_wb=True)
-            im = Image.fromarray(rgb).convert('LA')
+            im = Image.fromarray(rgb).convert("LA")
             im.save(str(output_name))
     except:
         # print("\nSomething is wrong with {}\n".format(str(imgfile)))
         pass
-    
+
     # print('{} has been successfully converted to a grayscale tiff.\n Path is {}\n'.format(name, output_name))
-    
+
     return output_name
 
 
 def section_props(props, im_name, resolution, minpixel, maxpixel, im_center):
     props_df = [
-        [region.label, region.centroid, scipy.spatial.distance.euclidean(im_center, region.centroid), region.filled_area, region.minor_axis_length, region.major_axis_length, region.eccentricity, region.filled_image, region.bbox]
-        for region
-        in props if region.minor_axis_length >= minpixel and region.major_axis_length <= maxpixel]
-    props_df = pd.DataFrame(props_df, columns=['label', 'centroid', 'distance', 'area', 'min', 'max', 'eccentricity', 'image', 'bbox'])
-    
-    section_id = props_df['distance'].astype(float).idxmin()
+        [
+            region.label,
+            region.centroid,
+            scipy.spatial.distance.euclidean(im_center, region.centroid),
+            region.filled_area,
+            region.minor_axis_length,
+            region.major_axis_length,
+            region.eccentricity,
+            region.filled_image,
+            region.bbox,
+        ]
+        for region in props
+        if region.minor_axis_length >= minpixel and region.major_axis_length <= maxpixel
+    ]
+    props_df = pd.DataFrame(
+        props_df,
+        columns=[
+            "label",
+            "centroid",
+            "distance",
+            "area",
+            "min",
+            "max",
+            "eccentricity",
+            "image",
+            "bbox",
+        ],
+    )
+
+    section_id = props_df["distance"].astype(float).idxmin()
     # print(section_id)
-    
+
     section = props_df.iloc[section_id]
-    
-    area_mu = section['area'] / np.square(resolution)
-    min_diam = section['min'] / resolution
-    max_diam = section['max'] / resolution
-    eccentricity = section['eccentricity']
-    
+
+    area_mu = section["area"] / np.square(resolution)
+    min_diam = section["min"] / resolution
+    max_diam = section["max"] / resolution
+    eccentricity = section["eccentricity"]
+
     section_data = pd.DataFrame(
-        {'ID': [im_name], 'area': [area_mu], 'eccentricity': [eccentricity], 'min': [min_diam],
-         'max': [max_diam]})
-    
-    bin_im = section['image']
-    bbox = section['bbox']
-    
+        {
+            "ID": [im_name],
+            "area": [area_mu],
+            "eccentricity": [eccentricity],
+            "min": [min_diam],
+            "max": [max_diam],
+        }
+    )
+
+    bin_im = section["image"]
+    bbox = section["bbox"]
+
     return section_data, bin_im, bbox
 
 
 def crop_section(img, im_name, resolution, minpixel, maxpixel, im_center):
-    
+
     try:
         # binarize
         thresh = skimage.filters.threshold_minimum(img)
         bin_img = skimage.segmentation.clear_border(img < thresh)
         # label the image
-        label_im, num_elem = skimage.measure.label(bin_img, connectivity=2, return_num=True)
-        
+        label_im, num_elem = skimage.measure.label(
+            bin_img, connectivity=2, return_num=True
+        )
+
         props = skimage.measure.regionprops(label_image=label_im, intensity_image=img)
-        
-        section_data, bin_im, bbox = section_props(props, im_name, resolution, minpixel, maxpixel, im_center)
-        
+
+        section_data, bin_im, bbox = section_props(
+            props, im_name, resolution, minpixel, maxpixel, im_center
+        )
+
         pad = 100
         minr = bbox[0] - pad
         minc = bbox[1] - pad
@@ -435,43 +541,59 @@ def crop_section(img, im_name, resolution, minpixel, maxpixel, im_center):
         maxc = bbox[3] + pad
         bbox_pad = [minc, minr, maxc, maxr]
         crop_im = np.asarray(Image.fromarray(img).crop(bbox_pad))
-    
+
     except:
         minr = int(im_center[0] / 2)
         minc = int(im_center[1] / 2)
         maxr = int(im_center[0] * 1.5)
         maxc = int(im_center[1] * 1.5)
-        
+
         bbox_pad = [minc, minr, maxc, maxr]
         # print("Error: \n Found no bbox for {} \n Used center 25% of image instead: {}".format(im_name, str(bbox_pad)))
-        
+
         crop_im = np.asarray(Image.fromarray(img).crop(bbox_pad))
-        
+
     return crop_im
+
 
 def segment_section(crop_im, im_name, resolution, minpixel, maxpixel, im_center):
     try:
         thresh = skimage.filters.threshold_minimum(crop_im)
         bin_ls_set = crop_im < thresh
 
-        seg_im = skimage.segmentation.morphological_chan_vese(np.asarray(crop_im), 40, init_level_set=bin_ls_set, smoothing=4)
-        
+        seg_im = skimage.segmentation.morphological_chan_vese(
+            np.asarray(crop_im), 40, init_level_set=bin_ls_set, smoothing=4
+        )
+
         seg_im_inv = np.asarray(seg_im != 0)
-        
-        crop_label_im, num_elem = skimage.measure.label(seg_im_inv, connectivity=2, return_num=True)
-        
-        crop_props = skimage.measure.regionprops(label_image=crop_label_im, intensity_image=np.asarray(crop_im))
-        
-        section_data, bin_im, bbox = section_props(crop_props, im_name, resolution, minpixel, maxpixel, im_center)
-    
+
+        crop_label_im, num_elem = skimage.measure.label(
+            seg_im_inv, connectivity=2, return_num=True
+        )
+
+        crop_props = skimage.measure.regionprops(
+            label_image=crop_label_im, intensity_image=np.asarray(crop_im)
+        )
+
+        section_data, bin_im, bbox = section_props(
+            crop_props, im_name, resolution, minpixel, maxpixel, im_center
+        )
+
     except:
         section_data = pd.DataFrame(
-            {'ID': [np.nan], 'area': [np.nan], 'eccentricity': [np.nan], 'min': [np.nan],
-             'max': [np.nan]})
+            {
+                "ID": [np.nan],
+                "area": [np.nan],
+                "eccentricity": [np.nan],
+                "min": [np.nan],
+                "max": [np.nan],
+            }
+        )
         thresh = skimage.filters.threshold_minimum(crop_im)
         bin_im = crop_im < thresh
-        
+
     return section_data, bin_im
+
 
 def save_sections(output_path, im_name, im, save_crop=False):
     if save_crop:
@@ -481,13 +603,14 @@ def save_sections(output_path, im_name, im, save_crop=False):
                 skimage.io.imsave(str(savename), im)
             except AttributeError:
                 im.save(savename)
-                
+
     else:
         binary_path = make_subdirectory(output_path, "binary")
         with pathlib.Path(binary_path).joinpath(im_name + ".tiff") as savename:
             im = Image.fromarray(im)
             im.save(savename)
-            
+
+
 # # @timing
 @blockPrint
 def section_seq(input_file, output_path, resolution, minsize, maxsize, save_img):
@@ -504,37 +627,45 @@ def section_seq(input_file, output_path, resolution, minsize, maxsize, save_img)
         An ndarray of the segmented (binary) image.
 
     """
-    
-    with tqdm(total=3, desc="section analysis sequence", unit="steps", position=1, leave=None) as pbar:
+
+    with tqdm(
+        total=3, desc="section analysis sequence", unit="steps", position=1, leave=None
+    ) as pbar:
         for i in [input_file]:
-            
+
             section_data = pd.DataFrame()
-            
+
             try:
 
                 # read in file
                 img, im_name = imread(input_file, use_skimage=True)
-            
+
                 # Gets the unique values in the image matrix. Since it is binary, there should only be 2.
                 unique, counts = np.unique(img, return_counts=True)
-            
+
                 # find center of image
                 im_center = list(np.divide(img.shape, 2))  # returns array of two floats
-            
+
                 minpixel = minsize * resolution
                 maxpixel = maxsize * resolution
-                
+
                 pbar.update(1)
-                
+
                 if len(unique) == 2:
                     seg_im = skimage.util.invert(img)
                     pbar.update(1)
-                    label_im, num_elem = skimage.measure.label(seg_im, connectivity=2, return_num=True)
-            
-                    props = skimage.measure.regionprops(label_image=label_im, intensity_image=img)
-            
-                    section_data, bin_im, bbox = section_props(props, im_name, resolution, minpixel, maxpixel, im_center)
-    
+                    label_im, num_elem = skimage.measure.label(
+                        seg_im, connectivity=2, return_num=True
+                    )
+
+                    props = skimage.measure.regionprops(
+                        label_image=label_im, intensity_image=img
+                    )
+
+                    section_data, bin_im, bbox = section_props(
+                        props, im_name, resolution, minpixel, maxpixel, im_center
+                    )
+
                     pad = 100
                     minr = bbox[0] - pad
                     minc = bbox[1] - pad
@@ -542,27 +673,31 @@ def section_seq(input_file, output_path, resolution, minsize, maxsize, save_img)
                     maxc = bbox[3] + pad
                     bbox_pad = [minc, minr, maxc, maxr]
                     crop_im = Image.fromarray(img).crop(bbox_pad)
-    
+
                     if save_img:
                         save_sections(output_path, im_name, crop_im, save_crop=True)
                         save_sections(output_path, im_name, bin_im, save_crop=False)
-                    
+
                     pbar.update(1)
                 else:
-                    crop_im = crop_section(img, im_name, resolution, minpixel, maxpixel, im_center)
+                    crop_im = crop_section(
+                        img, im_name, resolution, minpixel, maxpixel, im_center
+                    )
                     pbar.update(1)
-            
-                    section_data, bin_im = segment_section(crop_im, im_name, resolution, minpixel, maxpixel, im_center)
-                    
+
+                    section_data, bin_im = segment_section(
+                        crop_im, im_name, resolution, minpixel, maxpixel, im_center
+                    )
+
                     if save_img:
                         save_sections(output_path, im_name, crop_im, save_crop=True)
                         save_sections(output_path, im_name, bin_im, save_crop=False)
                     pbar.update(1)
             except:
                 pass
-        
+
             return section_data
-    
+
 
 # # @timing
 @blockPrint
@@ -586,12 +721,12 @@ def filter_curv(input_file, output_path, save_img):
         A string with the image name.
 
     """
-    
+
     # create pathlib object for input Image
     input_path = pathlib.Path(input_file)
-    
+
     gray_img, im_name = imread(input_path)
-    
+
     # # extract image name
     # im_name = input_path.stem
     #
@@ -599,19 +734,19 @@ def filter_curv(input_file, output_path, save_img):
     # gray_img = cv2.imread(str(input_path), 0)
     # type(gray_img)
     # # print("Image size is:", gray_img.shape)
-    
+
     # use frangi ridge filter to find hairs, the output will be inverted
     filter_img = skimage.filters.frangi(gray_img)
     type(filter_img)
     # print("Image size is:", filter_img.shape)
-    
+
     if save_img:
         output_path = make_subdirectory(output_path, append_name="filtered")
         # inverting and saving the filtered image
         img_inv = skimage.util.invert(filter_img)
         with pathlib.Path(output_path).joinpath(im_name + ".tiff") as save_path:
             plt.imsave(save_path, img_inv, cmap="gray")
-    
+
     return filter_img, im_name
 
 
@@ -637,33 +772,33 @@ def binarize_curv(filter_img, im_name, output_path, save_img):
         An array with the binarized image.
 
     """
-    
+
     selem = skimage.morphology.disk(5)
-    
+
     filter_img = skimage.exposure.adjust_log(filter_img)
-    
+
     try:
         thresh_im = filter_img > filters.threshold_otsu(filter_img)
     except:
         thresh_im = skimage.util.invert(filter_img)
-    
+
     # clear the border of the image (buffer is the px width to be considered as border)
     cleared_im = skimage.segmentation.clear_border(thresh_im, buffer_size=10)
-    
+
     # dilate the hair fibers
     binary_im = scipy.ndimage.binary_dilation(cleared_im, structure=selem, iterations=2)
-    
+
     if save_img:
         output_path = make_subdirectory(output_path, append_name="binarized")
         # invert image
         save_im = skimage.util.invert(binary_im)
-        
+
         # save image
         with pathlib.Path(output_path).joinpath(im_name + ".tiff") as save_name:
             im = Image.fromarray(save_im)
             im.save(save_name)
         return binary_im
-    
+
     else:
         return binary_im
 
@@ -699,8 +834,10 @@ def remove_particles(img, output_path, name, minpixel, prune, save_img):
 
     minimum = minpixel
     # clean = skimage.morphology.diameter_opening(img, diameter_threshold=minimum)
-    clean = skimage.morphology.remove_small_objects(img, connectivity=2, min_size=minimum)
-        
+    clean = skimage.morphology.remove_small_objects(
+        img, connectivity=2, min_size=minimum
+    )
+
     if save_img:
         img_inv = skimage.util.invert(clean)
         if prune:
@@ -708,8 +845,8 @@ def remove_particles(img, output_path, name, minpixel, prune, save_img):
         else:
             output_path = make_subdirectory(output_path, append_name="clean")
         with pathlib.Path(output_path).joinpath(name + ".tiff") as savename:
-            plt.imsave(savename, img_inv, cmap='gray')
-    
+            plt.imsave(savename, img_inv, cmap="gray")
+
     return clean
 
 
@@ -731,14 +868,14 @@ def check_bin(img):
 
     """
     img_bool = np.asarray(img, dtype=bool)
-    
+
     # Gets the unique values in the image matrix. Since it is binary, there should only be 2.
     unique, counts = np.unique(img_bool, return_counts=True)
     # print(unique)
     # print("Found this many counts:")
     # print(len(counts))
     # print(counts)
-    
+
     # If the length of unique is not 2 then print that the image isn't a binary.
     if len(unique) != 2:
         # print("Image is not binarized!")
@@ -750,11 +887,11 @@ def check_bin(img):
         img = skimage.util.invert(img_bool)
         # print("Now {} is reversed =)".format(str(img)))
         return img
-    
+
     else:
         # print("{} is already reversed".format(str(img)))
         img = img_bool
-        
+
         # print(type(img))
         return img
 
@@ -783,10 +920,10 @@ def skeletonize(clean_img, name, output_path, save_img):
     """
     # check if image is binary and properly inverted
     clean_img = check_bin(clean_img)
-    
+
     # skeletonize the hair
     skeleton = skimage.morphology.thin(clean_img)
-    
+
     if save_img:
         output_path = make_subdirectory(output_path, append_name="skeletonized")
         img_inv = skimage.util.invert(skeleton)
@@ -794,10 +931,10 @@ def skeletonize(clean_img, name, output_path, save_img):
             im = Image.fromarray(img_inv)
             im.save(output_path)
         return skeleton
-    
+
     else:
         # print("\n Done skeletonizing {}".format(name))
-        
+
         return skeleton
 
 
@@ -824,75 +961,73 @@ def prune(skeleton, name, pruned_dir, save_img):
         Boolean array of pruned skeleton image.
 
     """
-    
+
     # print("\nPruning {}...\n".format(name))
-    
+
     # identify 3-way branch-points
-    hit1 = np.array([[0, 1, 0],
-                     [0, 1, 0],
-                     [1, 0, 1]], dtype=np.uint8)
-    hit2 = np.array([[1, 0, 0],
-                     [0, 1, 0],
-                     [1, 0, 1]], dtype=np.uint8)
-    hit3 = np.array([[1, 0, 0],
-                     [0, 1, 1],
-                     [0, 1, 0]], dtype=np.uint8)
+    hit1 = np.array([[0, 1, 0], [0, 1, 0], [1, 0, 1]], dtype=np.uint8)
+    hit2 = np.array([[1, 0, 0], [0, 1, 0], [1, 0, 1]], dtype=np.uint8)
+    hit3 = np.array([[1, 0, 0], [0, 1, 1], [0, 1, 0]], dtype=np.uint8)
     hit_list = [hit1, hit2, hit3]
-    
+
     # numpy slicing to create 3 remaining rotations
     for ii in range(9):
         hit_list.append(np.transpose(hit_list[-3])[::-1, ...])
-    
+
     # add structure elements for branch-points four 4-way branchpoints
-    hit3 = np.array([[0, 1, 0],
-                     [1, 1, 1],
-                     [0, 1, 0]], dtype=np.uint8)
-    hit4 = np.array([[1, 0, 1],
-                     [0, 1, 0],
-                     [1, 0, 1]], dtype=np.uint8)
+    hit3 = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
+    hit4 = np.array([[1, 0, 1], [0, 1, 0], [1, 0, 1]], dtype=np.uint8)
     hit_list.append(hit3)
     hit_list.append(hit4)
     # print("Creating hit and miss list")
-    
+
     skel_image = check_bin(skeleton)
     # print("Converting image to binary array")
-    
+
     branch_points = np.zeros(skel_image.shape)
     # print("Creating empty array for branch points")
-    
+
     for hit in hit_list:
         target = hit.sum()
         curr = ndimage.convolve(skel_image, hit, mode="constant")
         branch_points = np.logical_or(branch_points, np.where(curr == target, 1, 0))
-    
+
     # print("Completed collection of branch points")
-    
+
     # pixels may "hit" multiple structure elements, ensure the output is a binary image
     branch_points_image = np.where(branch_points, 1, 0)
     # print("Ensuring binary")
-    
+
     # use SciPy's ndimage module for locating and determining coordinates of each branch-point
     labels, num_labels = ndimage.label(branch_points_image)
     # print("Labelling branches")
-    
+
     # use SciPy's ndimage module to determine the coordinates/pixel corresponding to the center of mass of each
     # branchpoint
-    branch_points = ndimage.center_of_mass(skel_image, labels=labels, index=range(1, num_labels + 1))
-    branch_points = np.array([value for value in branch_points if not np.isnan(value[0]) or not np.isnan(value[1])],
-                             dtype=int)
+    branch_points = ndimage.center_of_mass(
+        skel_image, labels=labels, index=range(1, num_labels + 1)
+    )
+    branch_points = np.array(
+        [
+            value
+            for value in branch_points
+            if not np.isnan(value[0]) or not np.isnan(value[1])
+        ],
+        dtype=int,
+    )
     # num_branch_points = len(branch_points)
-    
-    hit = np.array([[0, 0, 0],
-                    [0, 1, 0],
-                    [0, 0, 0]], dtype=np.uint8)
-    
-    dilated_branches = ndimage.convolve(branch_points_image, hit, mode='constant')
+
+    hit = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]], dtype=np.uint8)
+
+    dilated_branches = ndimage.convolve(branch_points_image, hit, mode="constant")
     dilated_branches_image = np.where(dilated_branches, 1, 0)
     # print("Ensuring binary dilated branches")
     pruned_image = np.subtract(skel_image, dilated_branches_image)
     # pruned_image = np.subtract(skel_image, branch_points_image)
-    
-    pruned_image = remove_particles(pruned_image, pruned_dir, name, minpixel=5, prune=True, save_img=save_img)
+
+    pruned_image = remove_particles(
+        pruned_image, pruned_dir, name, minpixel=5, prune=True, save_img=save_img
+    )
 
     return pruned_image
 
@@ -918,56 +1053,32 @@ def diag(skeleton):
         Boolean array of pruned skeleton image.
 
     """
-    
+
     # identify diagonals
-    hit1 = np.array([[0, 0, 0],
-                     [0, 1, 1],
-                     [1, 0, 0]], dtype=np.uint8)
-    hit2 = np.array([[1, 0, 0],
-                     [0, 1, 1],
-                     [0, 0, 0]], dtype=np.uint8)
-    hit3 = np.array([[0, 0, 1],
-                     [1, 1, 0],
-                     [0, 0, 0]], dtype=np.uint8)
-    hit4 = np.array([[0, 0, 0],
-                     [1, 1, 0],
-                     [0, 0, 1]], dtype=np.uint8)
-    hit5 = np.array([[0, 1, 0],
-                     [0, 1, 0],
-                     [1, 0, 0]], dtype=np.uint8)
-    hit6 = np.array([[0, 1, 0],
-                     [0, 1, 0],
-                     [0, 0, 1]], dtype=np.uint8)
-    hit7 = np.array([[1, 0, 0],
-                     [0, 1, 0],
-                     [0, 1, 0]], dtype=np.uint8)
-    hit8 = np.array([[0, 0, 1],
-                     [0, 1, 0],
-                     [0, 1, 0]], dtype=np.uint8)
+    hit1 = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 0]], dtype=np.uint8)
+    hit2 = np.array([[1, 0, 0], [0, 1, 1], [0, 0, 0]], dtype=np.uint8)
+    hit3 = np.array([[0, 0, 1], [1, 1, 0], [0, 0, 0]], dtype=np.uint8)
+    hit4 = np.array([[0, 0, 0], [1, 1, 0], [0, 0, 1]], dtype=np.uint8)
+    hit5 = np.array([[0, 1, 0], [0, 1, 0], [1, 0, 0]], dtype=np.uint8)
+    hit6 = np.array([[0, 1, 0], [0, 1, 0], [0, 0, 1]], dtype=np.uint8)
+    hit7 = np.array([[1, 0, 0], [0, 1, 0], [0, 1, 0]], dtype=np.uint8)
+    hit8 = np.array([[0, 0, 1], [0, 1, 0], [0, 1, 0]], dtype=np.uint8)
 
     mid_list = [hit1, hit2, hit3, hit4, hit5, hit6, hit7, hit8]
 
-    hit9 = np.array([[0, 0, 1],
-                     [0, 1, 0],
-                     [1, 0, 0]], dtype=np.uint8)
-    hit10 = np.array([[1, 0, 0],
-                     [0, 1, 0],
-                     [0, 0, 1]], dtype=np.uint8)
-    
+    hit9 = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=np.uint8)
+    hit10 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.uint8)
+
     diag_list = [hit9, hit10]
 
-    hit11 = np.array([[0, 1, 0],
-                     [0, 1, 0],
-                     [0, 1, 0]], dtype=np.uint8)
-    hit12 = np.array([[0, 0, 0],
-                      [1, 1, 1],
-                      [0, 0, 0]], dtype=np.uint8)
-    
+    hit11 = np.array([[0, 1, 0], [0, 1, 0], [0, 1, 0]], dtype=np.uint8)
+    hit12 = np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]], dtype=np.uint8)
+
     adj_list = [hit11, hit12]
-    
+
     skel_image = check_bin(skeleton).astype(int)
     # print("Converting image to binary array")
-    
+
     diag_points = np.zeros(skel_image.shape)
     mid_points = np.zeros(skel_image.shape)
     adj_points = np.zeros(skel_image.shape)
@@ -977,12 +1088,12 @@ def diag(skeleton):
         target = hit.sum()
         curr = ndimage.convolve(skel_image, hit, mode="constant")
         diag_points = np.logical_or(diag_points, np.where(curr == target, 1, 0))
-        
+
     for hit in mid_list:
         target = hit.sum()
         curr = ndimage.convolve(skel_image, hit, mode="constant")
         mid_points = np.logical_or(mid_points, np.where(curr == target, 1, 0))
-        
+
     for hit in adj_list:
         target = hit.sum()
         curr = ndimage.convolve(skel_image, hit, mode="constant")
@@ -1002,19 +1113,45 @@ def diag(skeleton):
 
     # use SciPy's ndimage module to determine the coordinates/pixel corresponding to the center of mass of each
     # branchpoint
-    diag_points = ndimage.center_of_mass(skel_image, labels=labels, index=range(1, num_labels + 1))
-    mid_points = ndimage.center_of_mass(skel_image, labels=labels2, index=range(1, num_labels2 + 1))
-    adj_points = ndimage.center_of_mass(skel_image, labels=labels3, index=range(1, num_labels3 + 1))
+    diag_points = ndimage.center_of_mass(
+        skel_image, labels=labels, index=range(1, num_labels + 1)
+    )
+    mid_points = ndimage.center_of_mass(
+        skel_image, labels=labels2, index=range(1, num_labels2 + 1)
+    )
+    adj_points = ndimage.center_of_mass(
+        skel_image, labels=labels3, index=range(1, num_labels3 + 1)
+    )
 
-    diag_points = np.array([value for value in diag_points if not np.isnan(value[0]) or not np.isnan(value[1])], dtype=int)
-    mid_points = np.array([value for value in mid_points if not np.isnan(value[0]) or not np.isnan(value[1])], dtype=int)
-    adj_points = np.array([value for value in adj_points if not np.isnan(value[0]) or not np.isnan(value[1])],
-                          dtype=int)
+    diag_points = np.array(
+        [
+            value
+            for value in diag_points
+            if not np.isnan(value[0]) or not np.isnan(value[1])
+        ],
+        dtype=int,
+    )
+    mid_points = np.array(
+        [
+            value
+            for value in mid_points
+            if not np.isnan(value[0]) or not np.isnan(value[1])
+        ],
+        dtype=int,
+    )
+    adj_points = np.array(
+        [
+            value
+            for value in adj_points
+            if not np.isnan(value[0]) or not np.isnan(value[1])
+        ],
+        dtype=int,
+    )
 
     num_diag_points = len(diag_points)
     num_mid_points = len(mid_points)
     num_adj_points = len(adj_points)
-    
+
     return num_diag_points, num_mid_points, num_adj_points
 
 
@@ -1044,7 +1181,7 @@ def taubin_curv(coords, resolution):
         If the radius is infinite, it will return 0.
 
     """
-    
+
     warnings.filterwarnings("ignore")  # suppress RuntimeWarnings from dividing by zero
     xy = np.array(coords)
     x = xy[:, 0] - np.mean(xy[:, 0])  # norming points by x avg
@@ -1052,16 +1189,18 @@ def taubin_curv(coords, resolution):
     # centroid = [np.mean(xy[:, 0]), np.mean(xy[:, 1])]
     z = x * x + y * y
     zmean = np.mean(z)
-    z0 = ((z - zmean) / (2. * np.sqrt(zmean)))  # changed from using old_div to Python 3 native division
+    z0 = (z - zmean) / (
+        2.0 * np.sqrt(zmean)
+    )  # changed from using old_div to Python 3 native division
     zxy = np.array([z0, x, y]).T
     u, s, v = np.linalg.svd(zxy, full_matrices=False)  #
     v = v.transpose()
     a = v[:, 2]
-    a[0] = (a[0]) / (2. * np.sqrt(zmean))
-    a = np.concatenate([a, [(-1. * zmean * a[0])]], axis=0)
+    a[0] = (a[0]) / (2.0 * np.sqrt(zmean))
+    a = np.concatenate([a, [(-1.0 * zmean * a[0])]], axis=0)
     # a, b = (-1 * a[1:3]) / a[0] / 2 + centroid
     r = np.sqrt(a[1] * a[1] + a[2] * a[2] - 4 * a[0] * a[3]) / abs(a[0]) / 2
-    
+
     if np.isfinite(r):
         curv = 1 / (r / resolution)
         if curv >= 0.00001:
@@ -1092,7 +1231,7 @@ def subset_gen(pixel_length, window_size_px, label):
         Nested list of coordinates for the window of measurement in the input curve/line.
 
     """
-    
+
     # TODO: Add warning that under 10pixels will yield problems
     subset_start = 0
     if window_size_px >= 10:
@@ -1112,108 +1251,101 @@ def within_element_func(output_path, name, element, taubin_df):
     # for within hair distribution
     label_name = str(element.label)
     element_df = pd.DataFrame(taubin_df)
-    element_df.columns = ['curv']
-    element_df['label'] = label_name
-    
+    element_df.columns = ["curv"]
+    element_df["label"] = label_name
+
     output_path = make_subdirectory(output_path, append_name="WithinElement")
-    with pathlib.Path(output_path).joinpath("WithinElement_" + name + "_Label-" + label_name + ".csv") as save_path:
+    with pathlib.Path(output_path).joinpath(
+        "WithinElement_" + name + "_Label-" + label_name + ".csv"
+    ) as save_path:
         element_df.to_csv(save_path)
-    
+
     return True
+
 
 @blockPrint
 def define_structure(structure: str):
 
     if structure == "mid":
-        hit1 = np.array([[0, 0, 0],
-                         [0, 1, 1],
-                         [1, 0, 0]], dtype=np.uint8)
-        hit2 = np.array([[1, 0, 0],
-                         [0, 1, 1],
-                         [0, 0, 0]], dtype=np.uint8)
-        hit3 = np.array([[0, 0, 1],
-                         [1, 1, 0],
-                         [0, 0, 0]], dtype=np.uint8)
-        hit4 = np.array([[0, 0, 0],
-                         [1, 1, 0],
-                         [0, 0, 1]], dtype=np.uint8)
-        hit5 = np.array([[0, 1, 0],
-                         [0, 1, 0],
-                         [1, 0, 0]], dtype=np.uint8)
-        hit6 = np.array([[0, 1, 0],
-                         [0, 1, 0],
-                         [0, 0, 1]], dtype=np.uint8)
-        hit7 = np.array([[1, 0, 0],
-                         [0, 1, 0],
-                         [0, 1, 0]], dtype=np.uint8)
-        hit8 = np.array([[0, 0, 1],
-                         [0, 1, 0],
-                         [0, 1, 0]], dtype=np.uint8)
-        
+        hit1 = np.array([[0, 0, 0], [0, 1, 1], [1, 0, 0]], dtype=np.uint8)
+        hit2 = np.array([[1, 0, 0], [0, 1, 1], [0, 0, 0]], dtype=np.uint8)
+        hit3 = np.array([[0, 0, 1], [1, 1, 0], [0, 0, 0]], dtype=np.uint8)
+        hit4 = np.array([[0, 0, 0], [1, 1, 0], [0, 0, 1]], dtype=np.uint8)
+        hit5 = np.array([[0, 1, 0], [0, 1, 0], [1, 0, 0]], dtype=np.uint8)
+        hit6 = np.array([[0, 1, 0], [0, 1, 0], [0, 0, 1]], dtype=np.uint8)
+        hit7 = np.array([[1, 0, 0], [0, 1, 0], [0, 1, 0]], dtype=np.uint8)
+        hit8 = np.array([[0, 0, 1], [0, 1, 0], [0, 1, 0]], dtype=np.uint8)
+
         mid_list = [hit1, hit2, hit3, hit4, hit5, hit6, hit7, hit8]
         return mid_list
     elif structure == "diag":
-        hit1 = np.array([[0, 0, 1],
-                         [0, 1, 0],
-                         [1, 0, 0]], dtype=np.uint8)
-        hit2 = np.array([[1, 0, 0],
-                         [0, 1, 0],
-                         [0, 0, 1]], dtype=np.uint8)
+        hit1 = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=np.uint8)
+        hit2 = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.uint8)
         diag_list = [hit1, hit2]
 
         return diag_list
 
     else:
         raise TypeError(
-            "Structure input for find_structure() is invalid, choose from 'mid', or 'diag' and input as str")
+            "Structure input for find_structure() is invalid, choose from 'mid', or 'diag' and input as str"
+        )
+
 
 @blockPrint
 def find_structure(skeleton, structure: str):
     skel_image = check_bin(skeleton).astype(int)
-    
+
     # print(skel_image.shape)
-    
+
     # creating empty array for hit and miss algorithm
     hit_points = np.zeros(skel_image.shape)
     # defining the structure used in hit-and-miss algorithm
     hit_list = define_structure(structure)
-    
+
     for hit in hit_list:
         target = hit.sum()
         curr = ndimage.convolve(skel_image, hit, mode="constant")
         hit_points = np.logical_or(hit_points, np.where(curr == target, 1, 0))
-    
+
     # Ensuring target image is binary
     hit_points_image = np.where(hit_points, 1, 0)
-    
+
     # use SciPy's ndimage module for locating and determining coordinates of each branch-point
     labels, num_labels = ndimage.label(hit_points_image)
-    
+
     return labels, num_labels
+
 
 @blockPrint
 def pixel_length_correction(element):
-    
+
     num_total_points = element.area
-    
+
     skeleton = element.image
-    
-    diag_points, num_diag_points = find_structure(skeleton, 'diag')
+
+    diag_points, num_diag_points = find_structure(skeleton, "diag")
     # print(num_diag_points)
-    
-    mid_points, num_mid_points = find_structure(skeleton, 'mid')
+
+    mid_points, num_mid_points = find_structure(skeleton, "mid")
     # print(num_mid_points)
-    
+
     num_adj_points = num_total_points - num_diag_points - num_mid_points
     # print(num_adj_points)
 
-    corr_element_pixel_length = num_adj_points + (num_diag_points * np.sqrt(2)) + (num_mid_points * np.sqrt(1.25))
+    corr_element_pixel_length = (
+        num_adj_points
+        + (num_diag_points * np.sqrt(2))
+        + (num_mid_points * np.sqrt(1.25))
+    )
 
     return corr_element_pixel_length
 
+
 # # @timing
 @blockPrint
-def analyze_each_curv(element, window_size_px, resolution, output_path, name, within_element):
+def analyze_each_curv(
+    element, window_size_px, resolution, output_path, name, within_element
+):
     """Calculates curvature for each labeled element in an array.
 
     Parameters
@@ -1231,70 +1363,76 @@ def analyze_each_curv(element, window_size_px, resolution, output_path, name, wi
         A list of the mean and median curvatures and the element length.
 
     """
-    
+
     element_label = np.array(element.coords)
-    
+
     # Due to the differences in distance for vertically and horizontally vs. diagonally adjacent pixels, a correction
     # is applied of a factor of 1.12. See literature below:
     # Smit AL, Sprangers JFCM, Sablik PW, Groenwold J. Automated measurement of root length with a three-dimensional
     # high-resolution scanner and image analysis. Plant Soil. 1994 Jan 1;158(1):145–9.
     # Smit AL, Bengough AG, Engels C, van Noordwijk M, Pellerin S, van de Geijn SC. Root Methods: A Handbook.
     # Springer Science & Business Media; 2013. 594 p.323
-    
+
     element_pixel_length = int(element.area)  # length of element in pixels
 
     corr_element_pixel_length = pixel_length_correction(element)
 
     length_mm = float(corr_element_pixel_length / resolution)
-    
+
     if not window_size_px is None:
         window_size_px = int(window_size_px)
-        
-        subset_loop = (subset_gen(element_pixel_length, window_size_px, element_label))  # generates subset loop
-        
+
+        subset_loop = subset_gen(
+            element_pixel_length, window_size_px, element_label
+        )  # generates subset loop
+
         # Safe generator expression in case of errors
-        curv = [taubin_curv(element_coords, resolution) for element_coords in subset_loop]
-    
-        taubin_df = pd.Series(curv).astype('float')
+        curv = [
+            taubin_curv(element_coords, resolution) for element_coords in subset_loop
+        ]
+
+        taubin_df = pd.Series(curv).astype("float")
         # print("\nCurv dataframe is:")
         # print(taubin_df)
         # print(type(taubin_df))
         # print("\nCurv df min is:{}".format(taubin_df.min()))
         # print("\nCurv df max is:{}".format(taubin_df.max()))
-        
+
         # print("\nTrimming outliers...")
-        taubin_df2 = taubin_df[taubin_df.between(taubin_df.quantile(.01), taubin_df.quantile(.99))]  # without outliers
-        
+        taubin_df2 = taubin_df[
+            taubin_df.between(taubin_df.quantile(0.01), taubin_df.quantile(0.99))
+        ]  # without outliers
+
         # print("\nAfter trimming outliers...")
         # print("\nCurv dataframe is:")
         # print(taubin_df2)
         # print(type(taubin_df2))
         # print("\nCurv df min is:{}".format(taubin_df2.min()))
         # print("\nCurv df max is:{}".format(taubin_df2.max()))
-        
+
         curv_mean = taubin_df2.mean()
         # print("\nCurv mean is:{}".format(curv_mean))
-        
+
         curv_median = taubin_df2.median()
         # print("\nCurv median is:{}".format(curv_median))
-        
+
         within_element_df = [curv_mean, curv_median, length_mm]
         # print("\nThe curvature summary stats for this element are:")
         # print(within_element_df)
-        
+
         if within_element:
             within_element_func(output_path, name, element, taubin_df)
-            
+
         if within_element_df is not None or np.nan:
             return within_element_df
         else:
             pass
-        
+
     elif window_size_px is None:
         curv = taubin_curv(element.coords, resolution)
-    
-        within_element_df = pd.DataFrame({'curv': [curv], 'length': [length_mm]})
-    
+
+        within_element_df = pd.DataFrame({"curv": [curv], "length": [length_mm]})
+
         if within_element_df is not None or np.nan:
             return within_element_df
         else:
@@ -1325,16 +1463,18 @@ def imread(input_file, use_skimage=False):
             img_float = skimage.io.imread(input_file, as_gray=True)
             img = skimage.img_as_ubyte(img_float)
         except ValueError:
-            img = np.array(Image.open(str(input_path)).convert('L'))
+            img = np.array(Image.open(str(input_path)).convert("L"))
     else:
-        img = np.array(Image.open(str(input_path)).convert('L'))
+        img = np.array(Image.open(str(input_path)).convert("L"))
     im_name = input_path.stem
     return img, im_name
 
 
 # # @timing
 @blockPrint
-def analyze_all_curv(img, name, output_path, resolution, window_size, window_unit, test, within_element):
+def analyze_all_curv(
+    img, name, output_path, resolution, window_size, window_unit, test, within_element
+):
     """Analyzes curvature for all elements in an image.
 
     Parameters
@@ -1360,117 +1500,174 @@ def analyze_all_curv(img, name, output_path, resolution, window_size, window_uni
         Pandas DataFrame with summary data for all elements in image.
 
     """
-    if type(img) != 'np.ndarray':
+    if type(img) != "np.ndarray":
         print(type(img))
         img = np.array(img)
     else:
         print(type(img))
-    
+
     # print("Analyzing {}".format(name))
-    
+
     img = check_bin(img)
-    
-    label_image, num_elements = skimage.measure.label(img.astype(int), connectivity=2, return_num=True)
+
+    label_image, num_elements = skimage.measure.label(
+        img.astype(int), connectivity=2, return_num=True
+    )
     # print("\n There are {} elements in the image".format(num_elements))
-    
+
     props = skimage.measure.regionprops(label_image)
-    
+
     if not isinstance(window_size, list):
         # print("Window size passed from args is:\n")
         # print(type(window_size))
         # print(window_size)
         # print("First item is:")
         # print(window_size[0])
-        
+
         window_size = [window_size]
-        
+
         # window_size = [float(i) for i in window_size]
-        
+
     name = name
-    
-    im_sumdf = [window_iter(props, name, i, window_unit, resolution, output_path, test, within_element) for i in window_size]
-    
+
+    im_sumdf = [
+        window_iter(
+            props, name, i, window_unit, resolution, output_path, test, within_element
+        )
+        for i in window_size
+    ]
+
     im_sumdf = pd.concat(im_sumdf)
-    
+
     return im_sumdf
 
+
 @blockPrint
-def window_iter(props, name, window_size, window_unit, resolution, output_path, test, within_element):
-    
+def window_iter(
+    props, name, window_size, window_unit, resolution, output_path, test, within_element
+):
+
     tempdf = []
-    
+
     if not window_size is None:
         if not window_unit == "px":
             window_size_px = int(window_size * resolution)
         else:
             window_size_px = int(window_size)
             window_size = int(window_size)
-        
+
         # print("\nWindow size for analysis is {} {}".format(window_size_px, window_unit))
         # print("Analysis of curvature for each element begins...")
-        
+
         name = str(name + "_WindowSize-" + str(window_size) + str(window_unit))
         # print(name)
         # print(window_size)
-        
-        tempdf = [analyze_each_curv(hair, window_size_px, resolution, output_path, name, within_element) for hair in props if hair.area > window_size]
-    
-        within_im_curvdf = pd.DataFrame(tempdf, columns=['curv_mean', 'curv_median', 'length'])
-        
-        within_im_curvdf2 = pd.DataFrame(within_im_curvdf, columns=['curv_mean', 'curv_median', 'length']).dropna()
-        
+
+        tempdf = [
+            analyze_each_curv(
+                hair, window_size_px, resolution, output_path, name, within_element
+            )
+            for hair in props
+            if hair.area > window_size
+        ]
+
+        within_im_curvdf = pd.DataFrame(
+            tempdf, columns=["curv_mean", "curv_median", "length"]
+        )
+
+        within_im_curvdf2 = pd.DataFrame(
+            within_im_curvdf, columns=["curv_mean", "curv_median", "length"]
+        ).dropna()
+
         output_path = make_subdirectory(output_path, append_name="analysis")
-        with pathlib.Path(output_path).joinpath("ImageSum_" + name + ".csv") as save_path:
+        with pathlib.Path(output_path).joinpath(
+            "ImageSum_" + name + ".csv"
+        ) as save_path:
             within_im_curvdf2.to_csv(save_path)
-        
-        curv_mean_im_mean = within_im_curvdf2['curv_mean'].mean()
-        curv_mean_im_median = within_im_curvdf2['curv_mean'].median()
-        curv_median_im_mean = within_im_curvdf2['curv_median'].mean()
-        curv_median_im_median = within_im_curvdf2['curv_median'].median()
-        length_mean = within_im_curvdf2['length'].mean()
-        length_median = within_im_curvdf2['length'].median()
+
+        curv_mean_im_mean = within_im_curvdf2["curv_mean"].mean()
+        curv_mean_im_median = within_im_curvdf2["curv_mean"].median()
+        curv_median_im_mean = within_im_curvdf2["curv_median"].mean()
+        curv_median_im_median = within_im_curvdf2["curv_median"].median()
+        length_mean = within_im_curvdf2["length"].mean()
+        length_median = within_im_curvdf2["length"].median()
         hair_count = len(within_im_curvdf2.index)
-        
+
         im_sumdf = pd.DataFrame(
-            {"ID": [name], "curv_mean_mean": [curv_mean_im_mean], "curv_mean_median": [curv_mean_im_median], "curv_median_mean": [curv_median_im_mean], "curv_median_median": [curv_median_im_median], "length_mean": [length_mean],"length_median": [length_median], "hair_count": [hair_count]})
+            {
+                "ID": [name],
+                "curv_mean_mean": [curv_mean_im_mean],
+                "curv_mean_median": [curv_mean_im_median],
+                "curv_median_mean": [curv_median_im_mean],
+                "curv_median_median": [curv_median_im_median],
+                "length_mean": [length_mean],
+                "length_median": [length_median],
+                "hair_count": [hair_count],
+            }
+        )
 
         if test:
             return within_im_curvdf2
         else:
             return im_sumdf
-    
+
     elif window_size is None:
         window_size_px = None
         within_element = None
         minsize = 0.5 * resolution
-        tempdf = [analyze_each_curv(hair, window_size_px, resolution, output_path, name, within_element) for hair in
-                  props if hair.area > minsize]
+        tempdf = [
+            analyze_each_curv(
+                hair, window_size_px, resolution, output_path, name, within_element
+            )
+            for hair in props
+            if hair.area > minsize
+        ]
 
         within_im_curvdf = pd.concat(tempdf)
 
         within_im_curvdf2 = within_im_curvdf.dropna()
 
         output_path = make_subdirectory(output_path, append_name="analysis")
-        with pathlib.Path(output_path).joinpath("ImageSum_" + name + ".csv") as save_path:
+        with pathlib.Path(output_path).joinpath(
+            "ImageSum_" + name + ".csv"
+        ) as save_path:
             within_im_curvdf2.to_csv(save_path)
 
-        im_mean = within_im_curvdf2['curv'].mean()
-        im_median = within_im_curvdf2['curv'].median()
-        length_mean = within_im_curvdf2['length'].mean()
-        length_median = within_im_curvdf2['length'].median()
+        im_mean = within_im_curvdf2["curv"].mean()
+        im_median = within_im_curvdf2["curv"].median()
+        length_mean = within_im_curvdf2["length"].mean()
+        length_median = within_im_curvdf2["length"].median()
         hair_count = len(within_im_curvdf2.index)
 
-        im_sumdf = pd.DataFrame({'ID': name, 'curv_mean': [im_mean], 'curv_median': [im_median], 'length_mean': [length_mean], 'length_median': [length_median], 'hair_count': [hair_count]})
-        
+        im_sumdf = pd.DataFrame(
+            {
+                "ID": name,
+                "curv_mean": [im_mean],
+                "curv_median": [im_median],
+                "length_mean": [length_mean],
+                "length_median": [length_median],
+                "hair_count": [hair_count],
+            }
+        )
+
         if test:
             return within_im_curvdf2
         else:
             return im_sumdf
-    
+
 
 # # @timing
 @blockPrint
-def curvature_seq(input_file, output_path, resolution, window_size, window_unit, save_img, test, within_element):
+def curvature_seq(
+    input_file,
+    output_path,
+    resolution,
+    window_size,
+    window_unit,
+    save_img,
+    test,
+    within_element,
+):
     """Sequence of functions to be executed for calculating curvature in fibermorph.
 
     Parameters
@@ -1496,39 +1693,63 @@ def curvature_seq(input_file, output_path, resolution, window_size, window_unit,
         Pandas DataFrame with curvature summary data for all images.
 
     """
-    
-    with tqdm(total=6, desc="curvature analysis sequence", unit="steps", position=1, leave=None) as pbar:
+
+    with tqdm(
+        total=6,
+        desc="curvature analysis sequence",
+        unit="steps",
+        position=1,
+        leave=None,
+    ) as pbar:
         for i in [input_file]:
-    
+
             # filter
             filter_img, im_name = filter_curv(input_file, output_path, save_img)
             pbar.update(1)
-            
+
             # binarize
             binary_img = binarize_curv(filter_img, im_name, output_path, save_img)
             pbar.update(1)
-    
+
             # remove particles
-            clean_im = remove_particles(binary_img, output_path, im_name, minpixel=int(resolution/2), prune=False, save_img=save_img)
+            clean_im = remove_particles(
+                binary_img,
+                output_path,
+                im_name,
+                minpixel=int(resolution / 2),
+                prune=False,
+                save_img=save_img,
+            )
             pbar.update(1)
-    
+
             # skeletonize
             skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
             pbar.update(1)
-    
+
             # prune
             pruned_im = prune(skeleton_im, im_name, output_path, save_img)
             pbar.update(1)
-    
+
             # analyze
-            im_df = analyze_all_curv(pruned_im, im_name, output_path, resolution, window_size, window_unit, test, within_element)
+            im_df = analyze_all_curv(
+                pruned_im,
+                im_name,
+                output_path,
+                resolution,
+                window_size,
+                window_unit,
+                test,
+                within_element,
+            )
             pbar.update(1)
-    
+
             return im_df
+
 
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
     """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -1547,6 +1768,7 @@ def tqdm_joblib(tqdm_object):
 
 
 # Main modules (organized in order of operations: raw2gray, curvature, section)
+
 
 def raw2gray(input_directory, output_location, file_type, jobs):
     """Convert raw files to grayscale tiff files.
@@ -1569,33 +1791,48 @@ def raw2gray(input_directory, output_location, file_type, jobs):
 
     """
     total_start = timer()
-    
-    file_list = [p for p in pathlib.Path(input_directory).rglob('*') if p.suffix in file_type]
+
+    file_list = [
+        p for p in pathlib.Path(input_directory).rglob("*") if p.suffix in file_type
+    ]
     list.sort(file_list)  # sort the files
     # print(file_list)  # printed the sorted files
-    
+
     # print("There are {} files to convert".format(len(file_list)))
     # print("\n\n")
-    
+
     # print("Converting raw files into grayscale tiff files...\n")
-    
+
     tiff_directory = make_subdirectory(output_location, append_name="tiff")
-    
-    with tqdm_joblib(tqdm(desc="raw2gray", total=len(file_list), unit="files", miniters=1)) as progress_bar:
+
+    with tqdm_joblib(
+        tqdm(desc="raw2gray", total=len(file_list), unit="files", miniters=1)
+    ) as progress_bar:
         progress_bar.monitor_interval = 2
-        Parallel(n_jobs=jobs, verbose=0)(delayed(raw_to_gray)(f, tiff_directory) for f in file_list)
-    
+        Parallel(n_jobs=jobs, verbose=0)(
+            delayed(raw_to_gray)(f, tiff_directory) for f in file_list
+        )
+
     # End the timer and then print out the how long it took
     total_end = timer()
-    total_time = (total_end - total_start)
-    
+    total_time = total_end - total_start
+
     # This will print out the minutes to the console, with 2 decimal places.
     tqdm.write("\n\nEntire analysis took: {}\n\n".format(convert(total_time)))
-    
+
     return True
 
 
-def curvature(input_directory, main_output_path, jobs, resolution, window_size, window_unit, save_img, within_element):
+def curvature(
+    input_directory,
+    main_output_path,
+    jobs,
+    resolution,
+    window_size,
+    window_unit,
+    save_img,
+    within_element,
+):
     """Takes directory of grayscale tiff images and analyzes curvature for each curve/line in the image.
 
     Parameters
@@ -1623,55 +1860,70 @@ def curvature(input_directory, main_output_path, jobs, resolution, window_size, 
         True.
 
     """
-    
+
     total_start = timer()
-    
+
     # create an output directory for the analyses
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_")
     dir_name = str(timestamp + "fibermorph_curvature")
     output_path = make_subdirectory(main_output_path, append_name=dir_name)
-    
+
     file_list = list_images(input_directory)
-    
+
     # List expression for curv df per image
     # im_df = [curvature_seq(input_file, filtered_dir, binary_dir, pruned_dir, clean_dir, skeleton_dir, analysis_dir,
     # resolution, window_size_mm, save_img) for input_file in file_list]
-    
+
     # This is the old parallel jobs function
-    with tqdm_joblib(tqdm(desc="curvature", total=len(file_list), unit="files", miniters=1)) as progress_bar:
+    with tqdm_joblib(
+        tqdm(desc="curvature", total=len(file_list), unit="files", miniters=1)
+    ) as progress_bar:
         progress_bar.monitor_interval = 2
-        im_df = (Parallel(n_jobs=jobs, verbose=0)(
-            delayed(curvature_seq)(input_file, output_path,
-                                   resolution, window_size, window_unit, save_img, test=False, within_element=within_element) for
-            input_file in file_list))
-    
+        im_df = Parallel(n_jobs=jobs, verbose=0)(
+            delayed(curvature_seq)(
+                input_file,
+                output_path,
+                resolution,
+                window_size,
+                window_unit,
+                save_img,
+                test=False,
+                within_element=within_element,
+            )
+            for input_file in file_list
+        )
+
     summary_df = pd.concat(im_df)
-    
+
     # print("This is the summary dataframe for the current sample")
     # print(summary_df)
-    
+
     # print("You've got data...")
     # print(summary_df)
-    
+
     jetzt = datetime.now()
     timestamp = jetzt.strftime("_%b%d_%H%M")
-    
-    with pathlib.Path(output_path).joinpath("curvature_summary_data{}.csv".format(timestamp)) as output_path:
+
+    with pathlib.Path(output_path).joinpath(
+        "curvature_summary_data{}.csv".format(timestamp)
+    ) as output_path:
         summary_df.to_csv(output_path)
         # print(output_path)
-    
+
     # End the timer and then print out the how long it took
     total_end = timer()
-    total_time = (total_end - total_start)
-    
+    total_time = total_end - total_start
+
     # This will print out the minutes to the console, with 2 decimal places.
     tqdm.write("\n\nComplete analysis took: {}\n\n".format(convert(total_time)))
-    
+
     return True
 
 
-def section(input_directory, main_output_path, jobs, resolution, minsize, maxsize, save_img):
+def section(
+    input_directory, main_output_path, jobs, resolution, minsize, maxsize, save_img
+):
     """Takes directory of grayscale images (and locates central section where necessary) and analyzes cross-sectional
     properties for each image.
 
@@ -1696,50 +1948,54 @@ def section(input_directory, main_output_path, jobs, resolution, minsize, maxsiz
         True.
 
     """
-    
+
     total_start = timer()
-    
+
     # Change to the folder for reading images
     file_list = list_images(input_directory)
-    
+
     # Shows what is in the file_list. The backslash n prints a new line
     # print("There are {} files in the cropped_list:".format(len(file_list)))
     # print(file_list, "\n\n")
-    
+
     # Creating subdirectories for cropped images
-    
+
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_")
     dir_name = str(timestamp + "fibermorph_section")
     output_path = make_subdirectory(main_output_path, append_name=dir_name)
-    
+
     # section_df = [analyze_section(f, output_im_path, minsize, maxsize, resolution) for f in file_list]
-    
-    with tqdm_joblib(tqdm(desc="section", total=len(file_list), unit="files", miniters=1)) as progress_bar:
+
+    with tqdm_joblib(
+        tqdm(desc="section", total=len(file_list), unit="files", miniters=1)
+    ) as progress_bar:
         progress_bar.monitor_interval = 2
-        section_df = (Parallel(n_jobs=jobs, verbose=0)(
-            delayed(section_seq)(f, output_path, resolution, minsize, maxsize, save_img) for f in file_list))
-    
+        section_df = Parallel(n_jobs=jobs, verbose=0)(
+            delayed(section_seq)(f, output_path, resolution, minsize, maxsize, save_img)
+            for f in file_list
+        )
+
     section_df = pd.concat(section_df).dropna()
-    section_df.set_index('ID', inplace=True)
-    
-    with pathlib.Path(output_path).joinpath("summary_section_data.csv") as df_output_path:
+    section_df.set_index("ID", inplace=True)
+
+    with pathlib.Path(output_path).joinpath(
+        "summary_section_data.csv"
+    ) as df_output_path:
         section_df.to_csv(df_output_path)
-    
+
     # End the timer and then print out the how long it took
     total_end = timer()
     total_time = int(total_end - total_start)
-    
+
     tqdm.write("\n\nComplete analysis took: {}\n\n".format(convert(total_time)))
-    
+
     return True
 
-#%%
+
 def main():
     args = parse_args()
-    
-    # Run fibermorph
-    
+
     if args.demo_real_curv is True:
         demo.real_curv(args.output_directory)
         sys.exit(0)
@@ -1752,27 +2008,38 @@ def main():
     # elif args.demo_dummy_section is True:
     #     demo.dummy_section(args.output_directory, args.repeats)
     #     sys.exit(0)
-    
+
     # Check for output directory and create it if it doesn't exist
     output_dir = make_subdirectory(args.output_directory)
-    
+
     if args.raw2gray is True:
-        raw2gray(
-            args.input_directory, output_dir, args.file_extension, args.jobs)
+        raw2gray(args.input_directory, output_dir, args.file_extension, args.jobs)
     elif args.curvature is True:
         curvature(
-            args.input_directory, output_dir, args.jobs,
-            args.resolution_mm, args.window_size, args.window_unit, args.save_image, args.within_element)
+            args.input_directory,
+            output_dir,
+            args.jobs,
+            args.resolution_mm,
+            args.window_size,
+            args.window_unit,
+            args.save_image,
+            args.within_element,
+        )
     elif args.section is True:
         section(
-            args.input_directory, output_dir, args.jobs,
-            args.resolution_mu, args.minsize, args.maxsize, args.save_image)
+            args.input_directory,
+            output_dir,
+            args.jobs,
+            args.resolution_mu,
+            args.minsize,
+            args.maxsize,
+            args.save_image,
+        )
     else:
         sys.exit("Error. Tim didn't exhaust all module options")
-    
+
     sys.exit(0)
 
 
 if __name__ == "__main__":
     main()
-

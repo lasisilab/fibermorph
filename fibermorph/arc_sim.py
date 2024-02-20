@@ -1,10 +1,9 @@
-# %% Imports
 import sympy
 
 from PIL import Image, ImageDraw
-import random
 from random import randint
-import pathlib
+from sklearn import preprocessing
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -42,15 +41,16 @@ dat = pd.concat([arc_names, start_theta, end_theta, arc_length], axis=1)
 
 # function to generate arc given the start and end angles
 
+
 def apoints(row):
     stheta = row[1]
     etheta = row[2]
     rthetas = np.linspace(start=stheta, stop=etheta, num=25)
     x = pd.Series(radius * np.cos(rthetas), name="x")
     y = pd.Series(radius * np.sin(rthetas), name="y")
-    
+
     dat2 = pd.concat([x, y], axis=1)
-    
+
     return dat2
 
 
@@ -64,21 +64,18 @@ dats["coords"] = dats.apply(lambda row: apoints(row), axis=1)
 def center_func(coord_df):
     x = coord_df["x"]
     y = coord_df["y"]
-    
+
     x2 = pd.Series(x - np.mean(x), name="x2")
     y2 = pd.Series(y - np.mean(y), name="y2")
-    
+
     dat3 = pd.concat([x2, y2], axis=1)
-    
+
     return dat3
 
 
 dats["c_coords"] = dats["coords"].apply(lambda row: center_func(row))
 
-from sklearn import preprocessing
-
-
-im = Image.new('L', (xlims, ylims), color="white")
+im = Image.new("L", (xlims, ylims), color="white")
 draw = ImageDraw.Draw(im)
 
 coord_list = np.array(dats["c_coords"].iloc[0])
@@ -96,17 +93,17 @@ im.show()
 # another function to center arcs to the middle of the window but by scaling
 def center_python_func(coord_df):
     scaler = preprocessing.MinMaxScaler(feature_range=(0, 200))
-    
+
     dat4 = coord_df
     dat4["x"] = scaler.fit_transform(coord_df[["x"]])
     dat4["y"] = scaler.fit_transform(coord_df[["y"]])
-    
+
     return dat4
 
 
 dats["c_coords"] = dats["coords"].apply(lambda row: center_python_func(row))
 
-im = Image.new('L', (xlims, ylims), color="white")
+im = Image.new("L", (xlims, ylims), color="white")
 draw = ImageDraw.Draw(im)
 
 coord_list = np.array(dats["c_coords"].iloc[0])
