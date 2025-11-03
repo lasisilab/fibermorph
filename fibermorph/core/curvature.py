@@ -368,8 +368,6 @@ def window_iter(
                 "length_mean": [length_mean],
                 "length_median": [length_median],
                 "hair_count": [hair_count],
-                "window_size": [window_size],
-                "window_unit": [window_unit],
             }
         )
 

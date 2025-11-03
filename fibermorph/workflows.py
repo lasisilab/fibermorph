@@ -223,7 +223,7 @@ def section(
     logger.info(f"Saved summary data to {df_output_path}")
 
     total_end = timer()
-    total_time = int(total_end - total_start)
+    total_time = total_end - total_start
 
     tqdm.write(f"\n\nComplete analysis took: {convert(total_time)}\n\n")
     logger.info(f"section completed in {convert(total_time)}")
