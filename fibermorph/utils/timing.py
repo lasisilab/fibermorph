@@ -41,14 +41,14 @@ def timing(f: Callable) -> Callable:
     """
     @wraps(f)
     def wrap(*args, **kw):
-        logger.info(f"\n\nThe {f.__name__} function is currently running...\n\n")
+        logger.info(f"The {f.__name__} function is currently running...")
         ts = timer()
         result = f(*args, **kw)
         te = timer()
         total_time = convert(te - ts)
         logger.info(
-            f"\n\nThe function: {f.__name__} \n\n with args:[{args},\n{kw}] "
-            f"\n\n and result: {result} \n\nTotal time: {total_time}\n\n"
+            f"The function: {f.__name__} with args:[{args}, {kw}] "
+            f"and result: {result} Total time: {total_time}"
         )
         return result
 
