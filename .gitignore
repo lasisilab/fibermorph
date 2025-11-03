@@ -127,4 +127,4 @@ __pycache__
 .testmondata
 .coverage
 .htmlcov/
-*.cover
+*.coverfibermorph/fibermorph_old.py
