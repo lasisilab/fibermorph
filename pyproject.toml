@@ -8,7 +8,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "fibermorph"
-version = "0.3.12"
+version = "0.3.13"
 description = "Toolkit for analyzing hair fiber morphology"
 authors = ["tinalasisi <tina.lasisi@gmail.com>"]
 license = "LICENSE"
@@ -40,11 +40,9 @@ scikit-learn = "^1.4.0"
 sympy = "^1.12"
 pytest = "^8.0.0"
 pyarrow = {version = "^15.0.0", python = "<3.13"}
-streamlit = {version = "^1.40.0", optional = true}
 
 [tool.poetry.scripts]
 fibermorph = "fibermorph.cli:main"
-fibermorph-gui = "fibermorph.gui:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
@@ -57,6 +55,3 @@ pre-commit = "^3.6.0"
 
 [tool.cibuildwheel]
 build-frontend = "build"
-
-[tool.poetry.extras]
-gui = ["streamlit"]
