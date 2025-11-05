@@ -12,7 +12,6 @@ permissions:
 
 env:
   PYTHON_VERSION: 3.11
-  CIBW_ONLY_PURE: 1
 
 jobs:
   build:
@@ -25,16 +24,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install cibuildwheel
-        run: pip install cibuildwheel
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build twine
 
-      - name: Build wheels for all supported Python versions
-        run: |
-          mkdir -p wheelhouse
-          cibuildwheel --output-dir wheelhouse
-
-      - name: Build source distribution
-        run: python -m pip install build && python -m build --sdist --outdir wheelhouse
+      - name: Build sdist and universal wheel
+        run: python -m build --sdist --wheel --outdir dist
 
       - name: Check if tag matches the package version
         run: |
@@ -48,7 +42,7 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           generateReleaseNotes: true
-          artifacts: "wheelhouse/*"
+          artifacts: "dist/*"
 
       - name: Publish to PyPI if not already published
         env:
@@ -60,6 +54,5 @@ jobs:
           if curl -sSf https://pypi.org/pypi/$PKG_NAME/json | grep -q '"$PKG_VERSION"'; then
             echo "Version $PKG_VERSION already exists on PyPI. Skipping publish."
           else
-            python3 -m pip install twine
-            twine upload --skip-existing wheelhouse/*
+            twine upload --skip-existing dist/*
           fi
