@@ -45,6 +45,7 @@ def check_bin(img: np.ndarray) -> np.ndarray:
             f"Image is not binarized! There is/are {hair_pixels} value(s) present, "
             "but there should be 2!"
         )
+        return img_bool
     
     # If it is binarized, check the orientation
     if counts[0] < counts[1]:

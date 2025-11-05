@@ -4,9 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 import skimage.measure
+from skimage import draw as sk_draw
 from fibermorph.core.curvature import (
-    taubin_curv, subset_gen, within_element_func, 
-    analyze_each_curv, analyze_all_curv, window_iter
+    taubin_curv,
+    subset_gen,
+    within_element_func,
+    analyze_each_curv,
+    analyze_all_curv,
+    window_iter,
 )
 
 
@@ -162,6 +167,79 @@ class TestWithinElementFunc:
         assert "curv" in df.columns
         assert "label" in df.columns
         assert len(df) == 3
+
+
+def _create_line_skeleton(length: int = 120) -> np.ndarray:
+    """Create a 2D binary array containing a single horizontal line."""
+    canvas = np.zeros((200, 200), dtype=np.uint8)
+    start_row = 100
+    start_col = 40
+    end_col = start_col + length - 1
+    rr, cc = sk_draw.line(start_row, start_col, start_row, end_col)
+    canvas[rr, cc] = 1
+    return canvas
+
+
+def _create_arc_skeleton(radius: int = 60, num_points: int = 180) -> np.ndarray:
+    """Create a 2D binary array containing a quarter-circle arc."""
+    size = radius * 2 + 40
+    canvas = np.zeros((size, size), dtype=np.uint8)
+    center_row = radius + 20
+    center_col = radius + 20
+    theta_values = np.linspace(0, np.pi / 2, num_points)
+    coords = []
+    for theta in theta_values:
+        row = int(round(center_row - radius * np.sin(theta)))
+        col = int(round(center_col + radius * np.cos(theta)))
+        coords.append((row, col))
+    for (row0, col0), (row1, col1) in zip(coords, coords[1:]):
+        rr, cc = sk_draw.line(row0, col0, row1, col1)
+        canvas[rr, cc] = 1
+    return canvas
+
+
+class TestAnalyzeAllCurvSynthetic:
+    """Integration-style tests for analyze_all_curv using synthetic skeletons."""
+
+    def test_analyze_all_curv_straight_line(self, tmp_path):
+        """Synthetic straight line should yield near-zero curvature."""
+        skeleton = _create_line_skeleton(length=140)
+        result = analyze_all_curv(
+            skeleton,
+            "synthetic_line",
+            tmp_path,
+            resolution=1.0,
+            window_size=30,
+            window_unit="px",
+            test=True,
+            within_element=False,
+        )
+
+        assert not result.empty
+        curv_mean = result["curv_mean_mean"].iloc[0]
+        assert curv_mean == pytest.approx(0.0, abs=1e-3)
+        assert result["hair_count"].iloc[0] == 1
+
+    def test_analyze_all_curv_quarter_arc(self, tmp_path):
+        """Synthetic quarter arc should report curvature close to 1/radius."""
+        radius = 60
+        skeleton = _create_arc_skeleton(radius=radius)
+        result = analyze_all_curv(
+            skeleton,
+            "synthetic_arc",
+            tmp_path,
+            resolution=1.0,
+            window_size=30,
+            window_unit="px",
+            test=True,
+            within_element=False,
+        )
+
+        assert not result.empty
+        expected_curvature = 1.0 / radius
+        curv_mean = result["curv_mean_mean"].iloc[0]
+        assert curv_mean == pytest.approx(expected_curvature, rel=0.35)
+        assert result["hair_count"].iloc[0] == 1
 
 
 class TestAnalyzeAllCurv:

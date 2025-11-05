@@ -5,7 +5,14 @@ import pandas as pd
 import pytest
 from PIL import Image
 import skimage.measure
-from fibermorph.core.section import section_props, crop_section, segment_section, save_sections
+from skimage import draw as sk_draw
+from fibermorph.analysis.section_pipeline import section_seq
+from fibermorph.core.section import (
+    section_props,
+    crop_section,
+    segment_section,
+    save_sections,
+)
 
 
 class TestSectionProps:
@@ -264,3 +271,51 @@ class TestSaveSections:
         crop_dir = tmp_path / "crop"
         assert (crop_dir / "image1.tiff").exists()
         assert (crop_dir / "image2.tiff").exists()
+
+
+class TestSectionSeqSynthetic:
+    """Integration-style tests for section_seq using generated images."""
+
+    def test_section_seq_with_synthetic_ellipse(self, tmp_path):
+        """Synthetic ellipse should yield predictable area and diameters."""
+        image_size = 256
+        radius_y = 40
+        radius_x = 60
+        canvas = np.full((image_size, image_size), 255, dtype=np.uint8)
+        center_row = center_col = image_size // 2
+        rr, cc = sk_draw.ellipse(
+            center_row,
+            center_col,
+            radius_y,
+            radius_x,
+            shape=canvas.shape,
+        )
+        canvas[rr, cc] = 0
+
+        image_path = tmp_path / "synthetic_section.tiff"
+        Image.fromarray(canvas).save(image_path)
+
+        resolution = 4.0  # pixels per micron
+        minsize = 5.0
+        maxsize = 40.0
+
+        section_df = section_seq(
+            image_path,
+            tmp_path,
+            resolution=resolution,
+            minsize=minsize,
+            maxsize=maxsize,
+            save_img=False,
+        )
+
+        assert not section_df.empty
+        row = section_df.iloc[0]
+
+        expected_min = (2 * radius_y) / resolution
+        expected_max = (2 * radius_x) / resolution
+        expected_area = (np.pi * radius_x * radius_y) / (resolution**2)
+
+        assert row["min"] == pytest.approx(expected_min, rel=0.1)
+        assert row["max"] == pytest.approx(expected_max, rel=0.1)
+        assert row["area"] == pytest.approx(expected_area, rel=0.2)
+        assert 0 <= row["eccentricity"] <= 1
