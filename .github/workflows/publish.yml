@@ -12,6 +12,7 @@ permissions:
 
 env:
   PYTHON_VERSION: 3.11
+  CIBW_ONLY_PURE: 1
 
 jobs:
   build:
