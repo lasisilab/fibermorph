@@ -106,7 +106,7 @@ To calculate curvature from grayscale TIFF images of hair fibers, the flag `--cu
 
 So, to run a curvature analysis, you would enter e.g.
 ```
-fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution 132 --save_image --within_element --jobs 2
+fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution_mm 132 --save_image --within_element --jobs 2
 ```
 
 ### Section
