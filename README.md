@@ -54,6 +54,20 @@ fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
 fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ```
 
+### Optional: Streamlit GUI (experimental)
+
+If you prefer a graphical interface, install the optional extras and launch the Streamlit app:
+
+```bash
+pip install "fibermorph[gui]"
+fibermorph-gui
+```
+
+This opens a browser window where you can:
+- Upload individual TIFFs or a ZIP folder of images (or supply a GitHub/Zenodo URL to download automatically)
+- Review per-image results directly in the app
+- Export the summary table as CSV and grab the full output bundle as a ZIP
+
 ## Using fibermorph on your data
 
 Once installed, use fibermorph on your own grayscale TIFFs:  
