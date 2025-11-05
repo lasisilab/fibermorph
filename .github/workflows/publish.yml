@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 env:
   PYTHON_VERSION: 3.11
@@ -49,16 +50,22 @@ jobs:
           allowUpdates: true
           updateOnlyUnreleased: false
 
-      - name: Publish to PyPI if not already published
-        env:
-          PYPI_USERNAME: __token__
-          PYPI_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      - name: Check if version already exists on PyPI
+        id: pypi_check
         run: |
           PKG_VERSION=$(poetry version -s)
           PKG_NAME=$(poetry version | awk '{print $1}')
           if curl -sSf https://pypi.org/pypi/$PKG_NAME/json | grep -q "\"$PKG_VERSION\""; then
-            echo "Version $PKG_VERSION already exists on PyPI. Skipping publish."
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version $PKG_VERSION already exists on PyPI. Will skip publish."
           else
-            echo "Publishing version $PKG_VERSION to PyPI..."
-            twine upload --skip-existing dist/*
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Version $PKG_VERSION does not exist on PyPI. Will publish."
           fi
+
+      - name: Publish to PyPI via Trusted Publishing
+        if: steps.pypi_check.outputs.exists == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
