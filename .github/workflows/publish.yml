@@ -1,64 +1,64 @@
-name: Release to PyPI
+name: Release
 
+# release on push version tag, e.g. v0.3.2
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write
+
+env:
+  PYTHON_VERSION: 3.11
 
 jobs:
-  build-and-publish:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/fibermorph/
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Remove old distributions
-        run: rm -rf dist/*
+      - name: Install poetry
+        run: pip install poetry
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip build
+      - name: Determine dependencies
+        run: poetry lock
 
-      - name: Build distributions
-        run: python -m build
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
 
-      - name: Inspect built artifacts
+      - name: Check if tag matches the package version
         run: |
-          ls -R dist
-          for file in dist/*; do
-            echo "----"
-            echo "$file:"
-            if [[ "$file" == *.whl ]]; then
-              meta=$(unzip -Z1 "$file" | grep -E '\\.dist-info/METADATA$' | head -n1)
-              if [[ -n "$meta" ]]; then
-                unzip -p "$file" "$meta" | sed -n '1,20p'
-              else
-                echo "No METADATA found in wheel"
-              fi
-            elif [[ "$file" == *.tar.gz ]]; then
-              pkg=$(tar -tzf "$file" | grep -E '/PKG-INFO$' | head -n1)
-              if [[ -n "$pkg" ]]; then
-                tar -xOf "$file" "$pkg" | sed -n '1,20p'
-              else
-                echo "No PKG-INFO found in sdist"
-              fi
-            fi
-          done
+          PKG_VERSION=$(poetry version -s)
+          TAG=${GITHUB_REF#refs/tags/}
+          if [[ "v$PKG_VERSION" != "$TAG" ]]; then
+            echo "Error: Tag ($TAG) does not match the package version (v$PKG_VERSION)."
+            exit 1
+          fi
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.8.14
+      - name: Install Dependencies using Poetry
+        run: poetry build
+
+      - uses: ncipollo/release-action@v1
         with:
-          packages-dir: dist/
-          skip-existing: true
+          generateReleaseNotes: true
+          artifacts: "dist/*"
+
+      - name: Publish to PyPI if not already published
+        env:
+          PYPI_USERNAME: __token__
+          PYPI_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          PKG_VERSION=$(poetry version -s)
+          PKG_NAME=$(poetry version | awk '{print $1}')
+          if curl -sSf https://pypi.org/pypi/$PKG_NAME/json | grep -q '"$PKG_VERSION"'; then
+            echo "Version $PKG_VERSION already exists on PyPI. Skipping publish."
+          else
+            poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
+          fi
