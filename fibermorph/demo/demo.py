@@ -1,12 +1,7 @@
 import sympy
 
-from skimage import draw
-import random
-from random import randint
-import matplotlib.pyplot as plt
-from sympy import geometry
-
 import os
+import random
 import pathlib
 import shutil
 import sys
@@ -15,6 +10,9 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import requests
+from PIL import Image
+from skimage import draw
+from sympy import geometry
 from tqdm import tqdm
 
 from . import dummy_data
@@ -210,16 +208,9 @@ def sim_ellipse(
     angle_deg,
 ):
     # conversions
-    um_per_inch = 25400
-    dpi = int(px_per_um * um_per_inch)
     min_rad_um = min_diam_um / 2
     max_rad_um = max_diam_um / 2
 
-    # image size in inches
-    im_width_inch = (im_width_px / px_per_um) / um_per_inch
-    im_height_inch = (im_height_px / px_per_um) / um_per_inch
-
-    imsize_inch = im_height_inch, im_width_inch
     imsize_px = im_height_px, im_width_px
 
     min_rad_px = min_rad_um * px_per_um
@@ -239,17 +230,10 @@ def sim_ellipse(
     )
     img[rr, cc] = 0
 
-    fig = plt.figure(frameon=False)
-    fig.set_size_inches(im_width_inch, im_height_inch)
-    ax = plt.Axes(fig, [0, 0, 1, 1])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-
     p1 = geometry.Point((im_height_px / px_per_um) / 2, (im_width_px / px_per_um) / 2)
     e1 = geometry.Ellipse(p1, hradius=max_rad_um, vradius=min_rad_um)
     area = sympy.N(e1.area)
     eccentricity = e1.eccentricity
-    ax.imshow(img, cmap="gray", aspect="auto")
 
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_%S_%f")
@@ -271,10 +255,8 @@ def sim_ellipse(
 
     df.to_csv(df_path)
 
-    plt.ioff()
-    fig.savefig(fname=im_path, dpi=um_per_inch)
-    plt.cla()
-    plt.close()
+    # Save directly via Pillow to avoid matplotlib canvas sizing issues
+    Image.fromarray(img).save(im_path, format="TIFF")
 
     return df
 
