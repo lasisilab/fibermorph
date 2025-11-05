@@ -10,7 +10,7 @@ Python package for image analysis of hair curvature and cross-section
 For those who want to run the program immediately, just follow these commands in your terminal. You will need to have conda and know how to use it. If you need instructions for this, read the detailed set up below.
 
 1. Create a conda environment.
-`conda create -n fibermorph_env python=3.8`
+`conda create -n fibermorph_env python=3.9`
 2. Activate this environment.
 `conda activate fibermorph_env`
 3. Install fibermorph.
@@ -44,13 +44,13 @@ For those who want to run the program immediately, just follow these commands in
 	- Open the *Terminal* application.
 3.  Now you can set up a virtual environment.
 
-	Create an empty conda environment, e.g. `conda create -n <fibermorph_env python=3.8` and load it `conda activate fibermorph_env`
+	Create an empty conda environment, e.g. `conda create -n fibermorph_env python=3.9` and load it `conda activate fibermorph_env`
 	You are now ready to install fibermorph!
 
 ## Install the package
 
 1. After having activated your new virtual environment, you can simply run `pip install fibermorph`.
-	You can find the latest release [here](https://github.com/tinalasisi/fibermorph/) on this GitHub page and on the [fibermorph PyPI page](https://pypi.org/project/fibermorph/).
+	You can find the latest release [here](https://github.com/lasisilab/fibermorph/) on this GitHub page and on the [fibermorph PyPI page](https://pypi.org/project/fibermorph/).
 2. You have successfully installed fibermorph.
 	The package is now ready for use. Enter `fibermorph -h` or `fibermorph --help` to see all the flags. You can keep reading to try out the demos and read instructions on the various modules within the package.
 
@@ -106,7 +106,7 @@ To calculate curvature from grayscale TIFF images of hair fibers, the flag `--cu
 
 So, to run a curvature analysis, you would enter e.g.
 ```
-fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution 132 --save_image --within_element --jobs 2
+fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution_mm 132 --save_image --within_element --jobs 2
 ```
 
 ### Section
