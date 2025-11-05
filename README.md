@@ -4,7 +4,8 @@
 # fibermorph
 
 
-Python package for image analysis of hair curvature and cross-section
+Python package for image analysis of hair curvature and cross-section.  
+Additional background docs now live in `docs/`.
 
 ## Quickstart
 
