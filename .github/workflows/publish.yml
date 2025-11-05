@@ -14,52 +14,51 @@ env:
   PYTHON_VERSION: 3.11
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install poetry
-        run: pip install poetry
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel
 
-      - name: Determine dependencies
-        run: poetry lock
+      - name: Build wheels for all supported Python versions
+        run: |
+          mkdir -p wheelhouse
+          cibuildwheel --output-dir wheelhouse
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
+      - name: Build source distribution
+        run: python -m pip install build && python -m build --sdist --outdir wheelhouse
 
       - name: Check if tag matches the package version
         run: |
-          PKG_VERSION=$(poetry version -s)
+          PKG_VERSION=$(python3 -c "import toml; print(toml.load('pyproject.toml')['tool']['poetry']['version'])")
           TAG=${GITHUB_REF#refs/tags/}
           if [[ "v$PKG_VERSION" != "$TAG" ]]; then
             echo "Error: Tag ($TAG) does not match the package version (v$PKG_VERSION)."
             exit 1
           fi
 
-      - name: Install Dependencies using Poetry
-        run: poetry build
-
       - uses: ncipollo/release-action@v1
         with:
           generateReleaseNotes: true
-          artifacts: "dist/*"
+          artifacts: "wheelhouse/*"
 
       - name: Publish to PyPI if not already published
         env:
           PYPI_USERNAME: __token__
           PYPI_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
-          PKG_VERSION=$(poetry version -s)
-          PKG_NAME=$(poetry version | awk '{print $1}')
+          PKG_VERSION=$(python3 -c "import toml; print(toml.load('pyproject.toml')['tool']['poetry']['version'])")
+          PKG_NAME=$(python3 -c "import toml; print(toml.load('pyproject.toml')['tool']['poetry']['name'])")
           if curl -sSf https://pypi.org/pypi/$PKG_NAME/json | grep -q '"$PKG_VERSION"'; then
             echo "Version $PKG_VERSION already exists on PyPI. Skipping publish."
           else
-            poetry publish --username $PYPI_USERNAME --password $PYPI_PASSWORD
+            python3 -m pip install twine
+            twine upload --skip-existing wheelhouse/*
           fi

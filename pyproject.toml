@@ -8,7 +8,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "fibermorph"
-version = "0.3.7"
+version = "0.3.8"
 description = "Toolkit for analyzing hair fiber morphology"
 authors = ["tinalasisi <tina.lasisi@gmail.com>"]
 license = "LICENSE"
