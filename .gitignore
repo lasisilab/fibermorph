@@ -110,9 +110,11 @@ test/results_cache
 
 # Environment
 venv
+.venv
 
 # Data
 data
+demo_output
 
 .DS_Store
 *.pyc
