@@ -1,3 +1,0 @@
-[tool.cibuildwheel]
-# Default: build for all available CPython versions
-# You can add more config here if you want to exclude/include specific versions or platforms
