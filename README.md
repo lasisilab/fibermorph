@@ -9,9 +9,9 @@ Additional background docs now live in `docs/`.
 
 ## Quickstart
 
-### Recommended: Using Conda (Python 3.9-3.12)
+### Recommended: Using Conda (Python 3.9-3.13)
 
-For the most reliable installation, we recommend using conda with Python 3.9-3.12:
+For the most reliable installation, we recommend using conda with Python 3.9-3.13:
 
 ```bash
 # Create a conda environment with Python 3.11
@@ -30,7 +30,7 @@ fibermorph --demo_real_curv --output_directory ~/fibermorph_demo
 ### Alternative: Using pip with virtual environment
 
 ```bash
-# Create a virtual environment (Python 3.9-3.12 recommended)
+# Create a virtual environment (Python 3.9-3.13 supported)
 python3.11 -m venv fibermorph_env
 
 # Activate the environment
@@ -43,7 +43,7 @@ fibermorph_env\Scripts\activate
 pip install fibermorph
 ```
 
-**Note:** Python 3.13 is not yet fully supported due to dependency constraints. We recommend Python 3.11 for the best compatibility.
+**Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13. We recommend Python 3.11 for the best compatibility.
 
 ### Quick test
 
