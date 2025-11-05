@@ -1,4 +1,4 @@
-﻿[![Test](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml/badge.svg)](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml) ![PyPI version](https://img.shields.io/pypi/v/fibermorph.svg)
+﻿[![Test](https://github.com/tinalasisi/fibermorph_update/actions/workflows/test.yaml/badge.svg)](https://github.com/tinalasisi/fibermorph_update/actions/workflows/test.yaml) ![PyPI version](https://img.shields.io/pypi/v/fibermorph.svg)
 
 
 # fibermorph
@@ -50,7 +50,7 @@ For those who want to run the program immediately, just follow these commands in
 ## Install the package
 
 1. After having activated your new virtual environment, you can simply run `pip install fibermorph`.
-	You can find the latest release [here](https://github.com/tinalasisi/fibermorph/) on this GitHub page and on the [fibermorph PyPI page](https://pypi.org/project/fibermorph/).
+	You can find the latest release [here](https://github.com/tinalasisi/fibermorph_update/) on this GitHub page and on the [fibermorph PyPI page](https://pypi.org/project/fibermorph/).
 2. You have successfully installed fibermorph.
 	The package is now ready for use. Enter `fibermorph -h` or `fibermorph --help` to see all the flags. You can keep reading to try out the demos and read instructions on the various modules within the package.
 
@@ -106,7 +106,7 @@ To calculate curvature from grayscale TIFF images of hair fibers, the flag `--cu
 
 So, to run a curvature analysis, you would enter e.g.
 ```
-fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution 132 --save_image --within_element --jobs 2
+fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --window_size 0.5 --window_unit mm --resolution_mm 132 --save_image --within_element --jobs 2
 ```
 
 ### Section
