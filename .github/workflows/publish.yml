@@ -46,6 +46,8 @@ jobs:
         with:
           generateReleaseNotes: true
           artifacts: "dist/*"
+          allowUpdates: true
+          updateOnlyUnreleased: false
 
       - name: Publish to PyPI if not already published
         env:
@@ -57,5 +59,6 @@ jobs:
           if curl -sSf https://pypi.org/pypi/$PKG_NAME/json | grep -q "\"$PKG_VERSION\""; then
             echo "Version $PKG_VERSION already exists on PyPI. Skipping publish."
           else
+            echo "Publishing version $PKG_VERSION to PyPI..."
             twine upload --skip-existing dist/*
           fi
