@@ -9,8 +9,8 @@ description = "Toolkit for analyzing hair fiber morphology"
 authors = ["tinalasisi <tina.lasisi@gmail.com>"]
 license = "LICENSE"
 readme = "README.md"
-homepage = "https://github.com/lasisilab/fibermorph"
-repository = "https://github.com/lasisilab/fibermorph"
+homepage = "https://github.com/tinalasisi/fibermorph_update"
+repository = "https://github.com/tinalasisi/fibermorph_update"
 
 [tool.poetry.dependencies]
 python = "^3.9"
