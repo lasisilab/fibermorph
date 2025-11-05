@@ -41,9 +41,19 @@ jobs:
             echo "----"
             echo "$file:"
             if [[ "$file" == *.whl ]]; then
-              unzip -p "$file" fibermorph-0.3.7.dist-info/METADATA | sed -n '1,20p'
+              meta=$(unzip -Z1 "$file" | grep -E '\\.dist-info/METADATA$' | head -n1)
+              if [[ -n "$meta" ]]; then
+                unzip -p "$file" "$meta" | sed -n '1,20p'
+              else
+                echo "No METADATA found in wheel"
+              fi
             elif [[ "$file" == *.tar.gz ]]; then
-              tar -xOf "$file" fibermorph-0.3.7/PKG-INFO | sed -n '1,20p'
+              pkg=$(tar -tzf "$file" | grep -E '/PKG-INFO$' | head -n1)
+              if [[ -n "$pkg" ]]; then
+                tar -xOf "$file" "$pkg" | sed -n '1,20p'
+              else
+                echo "No PKG-INFO found in sdist"
+              fi
             fi
           done
 
