@@ -7,21 +7,55 @@
 Python package for image analysis of hair curvature and cross-section
 
 ## Quickstart
-For those who want to run the program immediately, just follow these commands in your terminal. You will need to have conda and know how to use it. If you need instructions for this, read the detailed set up below.
 
-1. Create a conda environment.
-`conda create -n fibermorph_env python=3.9`
-2. Activate this environment.
-`conda activate fibermorph_env`
-3. Install fibermorph.
-`pip install fibermorph`
-4. Test fibermorph with real data.  
-`fibermorph --demo_real_curv --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName`
+### Recommended: Using Conda (Python 3.9-3.12)
 
-	and  
+For the most reliable installation, we recommend using conda with Python 3.9-3.12:
 
-	`fibermorph --demo_real_section --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName`
-5. Use fibermorph on your own grayscale TIFFs of longitudinal or cross-sectional hair images.  
+```bash
+# Create a conda environment with Python 3.11
+conda create -n fibermorph_env python=3.11
+
+# Activate the environment
+conda activate fibermorph_env
+
+# Install fibermorph
+pip install fibermorph
+
+# Test with demo data
+fibermorph --demo_real_curv --output_directory ~/fibermorph_demo
+```
+
+### Alternative: Using pip with virtual environment
+
+```bash
+# Create a virtual environment (Python 3.9-3.12 recommended)
+python3.11 -m venv fibermorph_env
+
+# Activate the environment
+# On macOS/Linux:
+source fibermorph_env/bin/activate
+# On Windows:
+fibermorph_env\Scripts\activate
+
+# Install fibermorph
+pip install fibermorph
+```
+
+**Note:** Python 3.13 is not yet fully supported due to dependency constraints. We recommend Python 3.11 for the best compatibility.
+
+### Quick test
+
+After installation, test that everything works:
+
+```bash
+fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
+fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
+```
+
+## Using fibermorph on your data
+
+Once installed, use fibermorph on your own grayscale TIFFs:  
 
 	`fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --resolution_mm 132 --jobs 2`  
 
