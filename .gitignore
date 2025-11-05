@@ -126,5 +126,6 @@ __pycache__
 # pytest test results
 .testmondata
 .coverage
+coverage.xml
 .htmlcov/
 *.coverfibermorph/fibermorph_old.py
