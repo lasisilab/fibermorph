@@ -1,5 +1,9 @@
 # Fibermorph Package Refactoring Summary
 
+## Release 0.3.7
+- Prepared package metadata for PyPI release 0.3.7.
+- Verified full test suite and demos in clean virtual environment prior to build.
+
 ## Overview
 
 Successfully refactored the fibermorph package from a monolithic 2,046-line `fibermorph.py` file into a clean, modular architecture with 23 new module files organized into logical directories.

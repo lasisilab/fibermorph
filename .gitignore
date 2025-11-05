@@ -111,6 +111,7 @@ test/results_cache
 # Environment
 venv
 .venv
+.venv*
 
 # Data
 data
