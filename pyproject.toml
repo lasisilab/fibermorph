@@ -32,7 +32,14 @@ pytest = "^8.0.0"
 pyarrow = "^15.0.0"
 
 [tool.poetry.scripts]
-fibermorph = "fibermorph.fibermorph:main"
+fibermorph = "fibermorph.cli:main"
+
 [tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^4.1.0"
+mypy = "^1.8.0"
 black = "^24.2.0"
+flake8 = "^7.0.0"
+isort = "^5.13.0"
+pre-commit = "^3.6.0"
 

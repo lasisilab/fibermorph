@@ -17,9 +17,8 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from fibermorph import dummy_data
-from fibermorph import fibermorph
+from . import dummy_data
+import fibermorph
 from joblib import Parallel, delayed
 
 
