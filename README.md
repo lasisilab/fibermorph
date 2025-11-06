@@ -3,34 +3,51 @@
 
 # fibermorph
 
+**Interactive toolkit for analyzing hair fiber morphology**
 
-Python package for image analysis of hair curvature and cross-section.  
-Additional background docs now live in `docs/`.
+fibermorph provides powerful image analysis tools for studying hair curvature and cross-sections, with both an intuitive **graphical interface** and a command-line interface for advanced users.
 
-## Quickstart
+## 🚀 Quick Start with the GUI (Recommended)
 
-### Recommended: Using Conda (Python 3.9-3.13)
-
-For the most reliable installation, we recommend using conda with Python 3.9-3.13:
+The easiest way to use fibermorph is through the interactive web interface:
 
 ```bash
 # Create a conda environment with Python 3.11
 conda create -n fibermorph_env python=3.11
-
-# Activate the environment
 conda activate fibermorph_env
 
-# Install fibermorph
-pip install fibermorph
+# Install fibermorph with the GUI
+pip install "fibermorph[gui]"
 
-# Test with demo data
-fibermorph --demo_real_curv --output_directory ~/fibermorph_demo
+# Launch the interactive GUI
+fibermorph-gui
 ```
 
-### Alternative: Using pip with virtual environment
+This opens an interactive web interface where you can:
+- 📤 **Upload images**: Single or multiple TIFF files, or provide a URL to download
+- 🔬 **Choose analysis type**: Curvature or Section analysis  
+- ⚙️ **Configure parameters**: Adjust settings with interactive controls
+- 💾 **Download results**: Get CSV summary data and ZIP file with all analysis outputs
+
+**✨ Try it online**: [https://fibermorph.streamlit.app/](https://fibermorph.streamlit.app/)
+
+## 📦 Installation
+
+### Recommended: Conda + GUI
 
 ```bash
-# Create a virtual environment (Python 3.9-3.13 supported)
+# Create environment (Python 3.10-3.13 supported)
+conda create -n fibermorph_env python=3.11
+conda activate fibermorph_env
+
+# Install with GUI
+pip install "fibermorph[gui]"
+```
+
+### Alternative: pip with virtual environment
+
+```bash
+# Create virtual environment
 python3.11 -m venv fibermorph_env
 
 # Activate the environment
@@ -39,76 +56,54 @@ source fibermorph_env/bin/activate
 # On Windows:
 fibermorph_env\Scripts\activate
 
-# Install fibermorph
-pip install fibermorph
+# Install fibermorph with GUI
+pip install "fibermorph[gui]"
 ```
 
-**Supported Python versions:** 3.9, 3.10, 3.11, 3.12, 3.13. We recommend Python 3.11 for the best compatibility.
+**Supported Python versions:** 3.10, 3.11, 3.12, 3.13. We recommend Python 3.11 for the best compatibility.
 
-### Quick test
+### Optional extras
 
-After installation, test that everything works:
+```bash
+pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
+pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
+pip install "fibermorph[gui]"    # install Streamlit GUI (recommended!)
+```
+
+Extras can be combined, e.g. `pip install "fibermorph[raw,viz,gui]"`.
+
+## 🖥️ Command Line Interface (Advanced Users)
+
+For automation, scripting, and batch processing, fibermorph provides a powerful CLI:
+
+### Quick test with demo data
 
 ```bash
 fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
 fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ```
 
-### Optional extras
+### Analyze your own data
 
-Some features rely on optional dependencies. Install them only if needed:
-
+**Curvature analysis:**
 ```bash
-pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
-pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
-pip install "fibermorph[gui]"    # install Streamlit GUI (experimental)
+fibermorph --curvature \
+  --input_directory /path/to/images \
+  --output_directory /path/to/results \
+  --resolution_mm 132 \
+  --jobs 2
 ```
 
-Extras can be combined, e.g. `pip install "fibermorph[raw,viz,gui]"`.
-
-### Optional: Streamlit GUI (experimental)
-
-If you prefer a graphical interface, install the GUI extras and launch the Streamlit app:
-
+**Section analysis:**
 ```bash
-pip install "fibermorph[gui]"
-fibermorph-gui
+fibermorph --section \
+  --input_directory /path/to/images \
+  --output_directory /path/to/results \
+  --minsize 30 \
+  --maxsize 180 \
+  --resolution_mu 4.25 \
+  --jobs 2
 ```
-
-**Note:** The GUI requires Python 3.10 or newer due to Streamlit's requirements.
-
-This opens a browser window where you can:
-- Upload individual TIFFs or a ZIP folder of images (or supply a GitHub/Zenodo URL to download automatically)
-- Review per-image results directly in the app
-- Export the summary table as CSV and grab the full output bundle as a ZIP
-
-## Using fibermorph on your data
-
-Once installed, use fibermorph on your own grayscale TIFFs:  
-
-	`fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --resolution_mm 132 --jobs 2`  
-
-	and
-
-	`fibermorph --section --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/ --minsize 30 --maxsize 180 --resolution_mu 4.25 --jobs 2`
-
-
-## Setting up
-1. We recommend you download [miniconda](https://docs.conda.io/en/latest/miniconda.html) for your operating system.
-	You may also download [Anaconda](https://docs.anaconda.com/anaconda/install/). The only difference is that Anaconda comes preloaded with more libraries (500 Mb). You won't need this to run fibermorph, so we recommend you stick to minconda which is the smaller (58 Mb) and quicker to download.
-
-	Whichever you choose *be sure to download the version with Python 3.X and not Python 2.X*.
-2. Open a terminal.
-	#### Mac OS:
-	- Open the *Terminal* application.
-	#### Windows:
-	- Type `miniconda` in the search box and open the application.
-	#### Linux:
-	- Open the *Terminal* application.
-3.  Now you can set up a virtual environment.
-
-	Create an empty conda environment, e.g. `conda create -n fibermorph_env python=3.9` and load it `conda activate fibermorph_env`
-	You are now ready to install fibermorph!
 
 ## Install the package
 
