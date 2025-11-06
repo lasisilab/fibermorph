@@ -54,6 +54,17 @@ fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
 fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ```
 
+### Optional extras
+
+Some features rely on optional dependencies. Install them only if needed:
+
+```bash
+pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
+pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
+```
+
+Extras can be combined, e.g. `pip install "fibermorph[raw,viz]"`.
+
 ## Using fibermorph on your data
 
 Once installed, use fibermorph on your own grayscale TIFFs:  

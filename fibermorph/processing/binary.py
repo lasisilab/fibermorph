@@ -13,7 +13,6 @@ import skimage.segmentation
 import skimage.util
 from PIL import Image
 from skimage import filters
-from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +102,9 @@ def binarize_curv(
         output_path = make_subdirectory(output_path, append_name="binarized")
         # invert image
         save_im = skimage.util.invert(binary_im)
-
-        # save image
+        save_array = (save_im.astype(np.uint8)) * 255
         save_name = pathlib.Path(output_path) / f"{im_name}.tiff"
-        im = Image.fromarray(save_im)
-        im.save(save_name)
+        Image.fromarray(save_array, mode="L").save(save_name)
         logger.debug(f"Saved binarized image to {save_name}")
 
     return binary_im
@@ -155,12 +152,13 @@ def remove_particles(
 
     if save_img:
         img_inv = skimage.util.invert(clean)
+        img_uint8 = (img_inv.astype(np.uint8)) * 255
         if prune:
             output_path = make_subdirectory(output_path, append_name="pruned")
         else:
             output_path = make_subdirectory(output_path, append_name="clean")
         savename = pathlib.Path(output_path) / f"{name}.tiff"
-        plt.imsave(savename, img_inv, cmap="gray")
+        Image.fromarray(img_uint8, mode="L").save(savename)
         logger.debug(f"Saved cleaned image to {savename}")
 
     return clean

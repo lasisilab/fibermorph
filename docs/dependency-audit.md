@@ -22,17 +22,17 @@ We want to reduce install and deployment overhead (for both the CLI and the Stre
 | GUI extras    | `streamlit`, `requests` | Already optional via `[gui]` extra | Keep optional |
 
 ### Audit Checklist
-1. **Inventory imports** – run `python tools/inventory_imports.py` to map modules → files.
-2. **Evaluate usage** – verify whether each package is required at runtime/tests or just demos.
-3. **Refactor replacements**:
-   - Update `demo/dummy_data.py` to remove `sympy`, `scikit-learn`, `shapely` usage.
-   - Confirm whether any modules still need `matplotlib`.
-4. **Update `pyproject.toml`**:
-   - Remove trimmed packages from `[tool.poetry.dependencies]`.
-   - Add extras (e.g., `raw = ["rawpy"]`, `viz = ["matplotlib"]`).
-5. **Guard optional imports** – wrap optional features with lazy imports/try-except.
-6. **Docs** – update README/CHANGELOG to describe new extras and lighter core install.
-7. **Testing** – run pytest with minimal install; run GUI smoke test with relevant extras.
+1. ✅ **Inventory imports** – `python tools/inventory_imports.py`
+2. ✅ **Refactor replacements**:
+   - `demo/dummy_data.py` now uses pure numpy/math.
+   - `demo/demo.py` ellipse helpers rewritten without sympy.
+   - Removed unused `fibermorph/arc_sim.py`.
+3. ✅ **Update `pyproject.toml`**:
+   - Core deps trimmed (removed matplotlib, rawpy, scikit-learn, shapely, sympy, pyarrow, argparse, pytest).
+   - Added optional extras `raw = ["rawpy"]`, `viz = ["matplotlib"]`.
+4. ✅ **Guard optional imports** – `raw_to_gray` now raises a helpful message when `rawpy` is missing.
+5. ✅ **Docs** – README updated with optional extras (`raw`, `viz`).
+6. ☐ **Testing** – run pytest with minimal install; confirm optional extras.
 
 ### Next Steps
 - Work on a dedicated branch (e.g., `feature/dependency-trim`) branched from `main`.

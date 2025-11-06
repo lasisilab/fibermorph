@@ -7,8 +7,8 @@ import logging
 import numpy as np
 import skimage
 import skimage.filters
+import skimage.io
 import skimage.util
-from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,9 @@ def filter_curv(
         output_path = make_subdirectory(output_path, append_name="filtered")
         # inverting and saving the filtered image
         img_inv = skimage.util.invert(filter_img)
+        img_uint8 = skimage.util.img_as_ubyte(np.clip(img_inv, 0, 1))
         save_path = pathlib.Path(output_path) / f"{im_name}.tiff"
-        plt.imsave(save_path, img_inv, cmap="gray")
+        skimage.io.imsave(save_path, img_uint8)
         logger.debug(f"Saved filtered image to {save_path}")
 
     return filter_img, im_name

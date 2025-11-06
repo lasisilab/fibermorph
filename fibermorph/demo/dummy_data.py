@@ -1,23 +1,22 @@
 """
-Script to generate dummy data for testing curvature
+Script to generate dummy data for testing curvature.
 
 Based on script to produce non-colliding rectangles adapted from:
 https://stackoverflow.com/questions/4373741/how-can-i-randomly-place-several-non-colliding-rects
 """
 
-import sympy
+from __future__ import annotations
 
-from PIL import Image, ImageDraw
-import random
-from random import randint
+import math
+import os
 import pathlib
+import random
+from datetime import datetime
+from random import randint
+
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import os
-from datetime import datetime
-from sklearn import preprocessing
-from sympy import geometry
+from PIL import Image, ImageDraw
 
 random.seed()
 
@@ -182,13 +181,20 @@ def line_func(radius):
 
         return dat3
 
-    def center_python_func(coord_df):
-        scaler = preprocessing.MinMaxScaler(feature_range=(0, 200))
+    def minmax_scale(series: pd.Series, feature_range: tuple[float, float] = (0.0, 200.0)) -> pd.Series:
+        lower, upper = feature_range
+        min_val = series.min()
+        max_val = series.max()
+        if math.isclose(max_val, min_val):
+            midpoint = (lower + upper) / 2.0
+            return pd.Series(np.full(series.shape, midpoint), index=series.index, dtype=float)
+        scale = (upper - lower) / (max_val - min_val)
+        return lower + (series - min_val) * scale
 
-        dat4 = coord_df
-        dat4["x"] = scaler.fit_transform(coord_df[["x"]])
-        dat4["y"] = scaler.fit_transform(coord_df[["y"]])
-
+    def center_python_func(coord_df: pd.DataFrame) -> pd.DataFrame:
+        dat4 = coord_df.copy()
+        dat4["x"] = minmax_scale(coord_df["x"])
+        dat4["y"] = minmax_scale(coord_df["y"])
         return dat4
 
     # dats["c_coords"] = dats["coords"].apply(lambda row: center_func(row))
@@ -200,13 +206,7 @@ def line_func(radius):
     coord_list = np.array(dats["c_coords"].iloc[0])
     coord_tuple = tuple(map(tuple, coord_list))
 
-    x, y = zip(*coord_tuple)
-    plt.scatter(x, y)
-    plt.show()
-
     draw.line(xy=coord_tuple, fill="black")
-
-    im.show()
 
 
 def draw_line(draw, rect, width):
@@ -238,11 +238,9 @@ def draw_ellipse(draw, rect, width):
     # values for min and max and area of ellipses to pass to dataframe
     width_df = maxx - minx
     height_df = maxy - miny
-    r1 = width_df / 2
-    r2 = height_df / 2
-    p1 = geometry.Point(0, 0)
-    e1 = geometry.Ellipse(p1, r1, r2)
-    area = sympy.N(e1.area)
+    r1 = width_df / 2.0
+    r2 = height_df / 2.0
+    area = math.pi * r1 * r2
 
     return width_df, height_df, area
 
