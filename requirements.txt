@@ -1,0 +1,6 @@
+# Requirements for Streamlit Cloud deployment
+# Install fibermorph from the current repository
+-e .
+
+# Streamlit is required for the GUI
+streamlit>=1.28.0

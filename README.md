@@ -61,9 +61,26 @@ Some features rely on optional dependencies. Install them only if needed:
 ```bash
 pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
 pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
+pip install "fibermorph[gui]"    # install Streamlit GUI (experimental)
 ```
 
-Extras can be combined, e.g. `pip install "fibermorph[raw,viz]"`.
+Extras can be combined, e.g. `pip install "fibermorph[raw,viz,gui]"`.
+
+### Optional: Streamlit GUI (experimental)
+
+If you prefer a graphical interface, install the GUI extras and launch the Streamlit app:
+
+```bash
+pip install "fibermorph[gui]"
+fibermorph-gui
+```
+
+**Note:** The GUI requires Python 3.10 or newer due to Streamlit's requirements.
+
+This opens a browser window where you can:
+- Upload individual TIFFs or a ZIP folder of images (or supply a GitHub/Zenodo URL to download automatically)
+- Review per-image results directly in the app
+- Export the summary table as CSV and grab the full output bundle as a ZIP
 
 ## Using fibermorph on your data
 
