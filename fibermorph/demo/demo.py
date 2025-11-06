@@ -1,5 +1,4 @@
-import sympy
-
+import math
 import os
 import random
 import pathlib
@@ -7,17 +6,16 @@ import shutil
 import sys
 from datetime import datetime
 
+import fibermorph
 import numpy as np
 import pandas as pd
 import requests
 from PIL import Image
+from joblib import Parallel, delayed
 from skimage import draw
-from sympy import geometry
 from tqdm import tqdm
 
 from . import dummy_data
-import fibermorph
-from joblib import Parallel, delayed
 
 
 def create_results_cache(path):
@@ -230,10 +228,13 @@ def sim_ellipse(
     )
     img[rr, cc] = 0
 
-    p1 = geometry.Point((im_height_px / px_per_um) / 2, (im_width_px / px_per_um) / 2)
-    e1 = geometry.Ellipse(p1, hradius=max_rad_um, vradius=min_rad_um)
-    area = sympy.N(e1.area)
-    eccentricity = e1.eccentricity
+    a = max_rad_um
+    b = min_rad_um
+    area = math.pi * a * b
+    if a <= 0:
+        eccentricity = 0.0
+    else:
+        eccentricity = math.sqrt(max(0.0, 1.0 - (b * b) / (a * a)))
 
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_%S_%f")
@@ -278,11 +279,10 @@ def validation_section(output_location, repeats, jobs=2):
     # create list of random variables from range
     def gen_ellipse_data():
         min_diam_um = random.uniform(30, 120)
-        ecc = random.uniform(0.0, 1.0)
-        # min_diam_um = random.uniform(30, max_diam_um)
-        max_diam_um = geometry.Ellipse(
-            geometry.Point(0, 0), vradius=min_diam_um, eccentricity=ecc
-        ).hradius
+        ecc = random.uniform(0.0, 0.99)
+        if ecc >= 1.0:
+            ecc = 0.99
+        max_diam_um = min_diam_um / math.sqrt(1.0 - ecc**2)
         angle_deg = random.randint(0, 360)
         list = [max_diam_um, min_diam_um, angle_deg]
         return list
