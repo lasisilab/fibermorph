@@ -5,6 +5,13 @@ All notable changes to fibermorph will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Python support**: Restricted to 3.10-3.12 (removed 3.13 support due to dependency compatibility issues)
+- Simplified dependency specifications (removed conditional Python 3.13 versions)
+- Updated CI to test only Python 3.10, 3.11, 3.12
+
 ## [1.0.0] - 2025-11-06
 
 ### 🎉 Major Release: fibermorph 1.0 with GUI
