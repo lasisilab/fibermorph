@@ -75,6 +75,8 @@ pip install "fibermorph[gui]"
 fibermorph-gui
 ```
 
+**Note:** The GUI requires Python 3.10 or newer due to Streamlit's requirements.
+
 This opens a browser window where you can:
 - Upload individual TIFFs or a ZIP folder of images (or supply a GitHub/Zenodo URL to download automatically)
 - Review per-image results directly in the app
