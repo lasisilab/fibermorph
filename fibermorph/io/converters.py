@@ -5,7 +5,6 @@ import pathlib
 from typing import Union
 import logging
 
-import rawpy
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -35,6 +34,12 @@ def raw_to_gray(
     name = os.path.splitext(basename)[0] + ".tiff"
     output_name = output_directory / name
 
+    if rawpy is None:
+        raise RuntimeError(
+            "rawpy is required to convert RAW files. Install optional dependencies via "
+            "`pip install fibermorph[raw]`."
+        )
+
     try:
         with rawpy.imread(imgfile) as raw:
             rgb = raw.postprocess(use_auto_wb=True)
@@ -49,3 +54,7 @@ def raw_to_gray(
         raise
 
     return output_name
+try:
+    import rawpy
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    rawpy = None

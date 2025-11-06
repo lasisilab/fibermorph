@@ -1,70 +1,67 @@
-"""Utility to inventory top-level imports used in the fibermorph package.
+"""Inventory top-level imports across the fibermorph package.
 
-Run with:
+Run:
     python tools/inventory_imports.py
 """
 
 from __future__ import annotations
 
 import ast
-import sys
 from pathlib import Path
-from typing import Dict, Set
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = PROJECT_ROOT / "fibermorph"
 
 
-def collect_imports(path: Path) -> Dict[str, Set[str]]:
-    modules: Dict[str, Set[str]] = {}
-    for py_file in path.rglob("*.py"):
-        if "__pycache__" in py_file.parts:
-            continue
-        rel_path = py_file.relative_to(PROJECT_ROOT)
-        with py_file.open("r", encoding="utf-8") as handle:
-            try:
-                tree = ast.parse(handle.read(), filename=str(rel_path))
-            except SyntaxError:
-                continue
-
-        visitor = ImportCollector()
-        visitor.visit(tree)
-        modules[str(rel_path)] = visitor.modules
-    return modules
-
-
 class ImportCollector(ast.NodeVisitor):
     def __init__(self) -> None:
-        self.modules: Set[str] = set()
+        self.modules: set[str] = set()
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
-            top_level = alias.name.split(".")[0]
-            self.modules.add(top_level)
+            top = alias.name.split(".")[0]
+            self.modules.add(top)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.module is None:
+        if not node.module:
             return
-        top_level = node.module.split(".")[0]
-        self.modules.add(top_level)
+        top = node.module.split(".")[0]
+        self.modules.add(top)
+
+
+def collect_imports(root: Path) -> dict[str, set[str]]:
+    mapping: dict[str, set[str]] = {}
+    for py_file in root.rglob("*.py"):
+        if "__pycache__" in py_file.parts:
+            continue
+        rel = py_file.relative_to(PROJECT_ROOT)
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(rel))
+        except SyntaxError:
+            continue
+
+        visitor = ImportCollector()
+        visitor.visit(tree)
+        mapping[str(rel)] = visitor.modules
+    return mapping
 
 
 def main() -> None:
     data = collect_imports(PACKAGE_ROOT)
-    unique_modules: Dict[str, Set[str]] = {}
-    for file_path, modules in sorted(data.items()):
+    inverted: dict[str, set[str]] = {}
+    for path, modules in data.items():
         for module in modules:
-            unique_modules.setdefault(module, set()).add(file_path)
+            inverted.setdefault(module, set()).add(path)
 
     print("Detected top-level imports:\n")
-    for module in sorted(unique_modules):
-        locations = ", ".join(sorted(unique_modules[module]))
+    for module in sorted(inverted):
+        locations = ", ".join(sorted(inverted[module]))
         print(f"{module:15} -> {locations}")
 
     print("\nSummary:")
-    for module in sorted(unique_modules):
+    for module in sorted(inverted):
         print(f"- {module}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

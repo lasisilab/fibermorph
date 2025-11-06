@@ -54,9 +54,21 @@ fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
 fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ```
 
+### Optional extras
+
+Some features rely on optional dependencies. Install them only if needed:
+
+```bash
+pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
+pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
+pip install "fibermorph[gui]"    # install Streamlit GUI (experimental)
+```
+
+Extras can be combined, e.g. `pip install "fibermorph[raw,viz,gui]"`.
+
 ### Optional: Streamlit GUI (experimental)
 
-If you prefer a graphical interface, install the optional extras and launch the Streamlit app:
+If you prefer a graphical interface, install the GUI extras and launch the Streamlit app:
 
 ```bash
 pip install "fibermorph[gui]"
