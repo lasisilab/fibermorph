@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Python support**: Restricted to 3.10-3.12 (removed 3.13 support due to dependency compatibility issues)
+## [1.0.1] - 2025-11-06
+
+### Fixed
+- **Python support**: Corrected version constraint to 3.10-3.12 (removed 3.13 support due to dependency compatibility issues)
 - Simplified dependency specifications (removed conditional Python 3.13 versions)
 - Updated CI to test only Python 3.10, 3.11, 3.12
+- Updated documentation to clarify Python 3.13 is not yet supported
 
 ## [1.0.0] - 2025-11-06
 
