@@ -36,7 +36,7 @@ This opens an interactive web interface where you can:
 ### Recommended: Conda + GUI
 
 ```bash
-# Create environment (Python 3.10-3.13 supported)
+# Create environment (Python 3.10-3.12 supported)
 conda create -n fibermorph_env python=3.11
 conda activate fibermorph_env
 
@@ -60,7 +60,9 @@ fibermorph_env\Scripts\activate
 pip install "fibermorph[gui]"
 ```
 
-**Supported Python versions:** 3.10, 3.11, 3.12, 3.13. We recommend Python 3.11 for the best compatibility.
+**Supported Python versions:** 3.10, 3.11, 3.12. We recommend Python 3.11 for the best compatibility.
+
+> **Note**: Python 3.13 support is planned but not yet available due to dependency compatibility issues.
 
 ### Optional extras
 
