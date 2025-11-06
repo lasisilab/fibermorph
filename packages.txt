@@ -1,0 +1,4 @@
+# System packages for Streamlit Cloud
+# Required for image processing libraries like scikit-image
+libgl1-mesa-glx
+libglib2.0-0
