@@ -19,6 +19,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised at runtime
 
 import pandas as pd
 import requests
+from PIL import Image, UnidentifiedImageError
 
 from fibermorph import __version__
 from fibermorph.workflows import curvature, section
@@ -57,26 +58,21 @@ def _write_uploaded_files(
     uploaded_files: Iterable["st.runtime.uploaded_file_manager.UploadedFile"],  # type: ignore[attr-defined]
     target_dir: Path,
 ) -> List[Path]:
-    saved: List[Path] = []
     for file in uploaded_files:
         filename = Path(file.name).name
         suffix = Path(filename).suffix.lower()
 
         if suffix == ".zip":
-            with zipfile.ZipFile(io.BytesIO(file.getvalue())) as archive:
-                archive.extractall(target_dir)
+            try:
+                with zipfile.ZipFile(io.BytesIO(file.getvalue())) as archive:
+                    archive.extractall(target_dir)
+            except zipfile.BadZipFile as exc:
+                raise ValueError(f"Uploaded ZIP appears to be corrupted: {filename}") from exc
         else:
             destination = target_dir / filename
             destination.write_bytes(file.getbuffer())
 
-    saved = sorted(
-        [
-            p
-            for p in target_dir.rglob("*")
-            if p.is_file() and p.suffix.lower() in {".tif", ".tiff"}
-        ]
-    )
-    return saved
+    return _collect_tiff_files(target_dir)
 
 
 def _latest_child_dir(directory: Path) -> Optional[Path]:
@@ -94,17 +90,14 @@ def _download_dataset(url: str, target_dir: Path) -> List[Path]:
     suffix = Path(filename).suffix.lower()
 
     if suffix == ".zip":
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-            archive.extractall(target_dir)
-        files = sorted(
-            [
-                p
-                for p in target_dir.rglob("*")
-                if p.is_file() and p.suffix.lower() in {".tif", ".tiff"}
-            ]
-        )
+        try:
+            with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                archive.extractall(target_dir)
+        except zipfile.BadZipFile as exc:
+            raise ValueError("Downloaded ZIP appears to be corrupted.") from exc
+        files = _collect_tiff_files(target_dir)
         if not files:
-            raise ValueError("No TIFF files were found inside the downloaded archive.")
+            raise ValueError("No valid TIFF files were found inside the downloaded archive.")
         return files
 
     if suffix in {".tif", ".tiff"}:
@@ -112,9 +105,34 @@ def _download_dataset(url: str, target_dir: Path) -> List[Path]:
         with destination.open("wb") as handle:
             for chunk in response.iter_content(chunk_size=8192):
                 handle.write(chunk)
+        try:
+            with Image.open(destination) as img:
+                img.verify()
+        except UnidentifiedImageError as exc:
+            destination.unlink(missing_ok=True)
+            raise ValueError(f"Downloaded file is not a valid TIFF: {filename}") from exc
         return [destination]
 
     raise ValueError("URL must point to a .tif/.tiff image or a .zip archive containing TIFFs.")
+
+
+def _collect_tiff_files(directory: Path) -> List[Path]:
+    valid_files: List[Path] = []
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.name.startswith("._") or "__MACOSX" in path.parts:
+            continue
+        if path.suffix.lower() not in {".tif", ".tiff"}:
+            continue
+        try:
+            with Image.open(path) as img:
+                img.verify()
+        except UnidentifiedImageError:
+            LOGGER.warning("Skipping invalid TIFF file: %s", path.name)
+            continue
+        valid_files.append(path)
+    return sorted(valid_files)
 
 
 def _load_csvs(root: Path, pattern: str) -> List[pd.DataFrame]:
