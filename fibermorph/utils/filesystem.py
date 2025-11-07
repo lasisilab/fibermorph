@@ -6,6 +6,8 @@ import shutil
 from typing import List, Union
 import logging
 
+from PIL import Image, UnidentifiedImageError
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,9 +94,36 @@ def list_images(directory: Union[str, pathlib.Path]) -> List[pathlib.Path]:
     """
     exts = [".tif", ".tiff"]
     mainpath = pathlib.Path(directory)
-    file_list = [p for p in pathlib.Path(mainpath).rglob("*") if p.suffix in exts]
+    
+    # First collect all files with the right extension
+    potential_files = [p for p in pathlib.Path(mainpath).rglob("*") if p.suffix in exts]
+    
+    # Now validate each file
+    valid_files = []
+    for file_path in potential_files:
+        # Skip hidden files and macOS metadata
+        if file_path.name.startswith("._") or "__MACOSX" in file_path.parts:
+            logger.debug(f"Skipping system file: {file_path.name}")
+            continue
+            
+        # Skip if not actually a file
+        if not file_path.is_file():
+            logger.debug(f"Skipping non-file: {file_path}")
+            continue
+        
+        # Try to verify it's a valid image
+        try:
+            with Image.open(file_path) as img:
+                img.verify()
+            valid_files.append(file_path)
+        except UnidentifiedImageError:
+            logger.warning(f"Skipping invalid image file: {file_path.name}")
+            continue
+        except Exception as e:
+            logger.warning(f"Error checking file {file_path.name}: {e}")
+            continue
 
-    list.sort(file_list)  # sort the files
-    logger.debug(f"Found {len(file_list)} image files")
+    list.sort(valid_files)  # sort the files
+    logger.debug(f"Found {len(valid_files)} valid image files out of {len(potential_files)} potential files")
 
-    return file_list
+    return valid_files

@@ -6,6 +6,7 @@ import logging
 
 import pandas as pd
 from tqdm import tqdm
+from PIL import UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
@@ -51,51 +52,62 @@ def curvature_seq(
     from ..processing.morphology import skeletonize, prune
     from ..core.curvature import analyze_all_curv
 
-    with tqdm(
-        total=6,
-        desc="curvature analysis sequence",
-        unit="steps",
-        position=1,
-        leave=None,
-    ) as pbar:
-        # filter
-        filter_img, im_name = filter_curv(input_file, output_path, save_img)
-        pbar.update(1)
+    try:
+        with tqdm(
+            total=6,
+            desc="curvature analysis sequence",
+            unit="steps",
+            position=1,
+            leave=None,
+        ) as pbar:
+            # filter
+            filter_img, im_name = filter_curv(input_file, output_path, save_img)
+            pbar.update(1)
 
-        # binarize
-        binary_img = binarize_curv(filter_img, im_name, output_path, save_img)
-        pbar.update(1)
+            # binarize
+            binary_img = binarize_curv(filter_img, im_name, output_path, save_img)
+            pbar.update(1)
 
-        # remove particles
-        clean_im = remove_particles(
-            binary_img,
-            output_path,
-            im_name,
-            minpixel=int(resolution / 2),
-            prune=False,
-            save_img=save_img,
-        )
-        pbar.update(1)
+            # remove particles
+            clean_im = remove_particles(
+                binary_img,
+                output_path,
+                im_name,
+                minpixel=int(resolution / 2),
+                prune=False,
+                save_img=save_img,
+            )
+            pbar.update(1)
 
-        # skeletonize
-        skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
-        pbar.update(1)
+            # skeletonize
+            skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
+            pbar.update(1)
 
-        # prune
-        pruned_im = prune(skeleton_im, im_name, output_path, save_img)
-        pbar.update(1)
+            # prune
+            pruned_im = prune(skeleton_im, im_name, output_path, save_img)
+            pbar.update(1)
 
-        # analyze
-        im_df = analyze_all_curv(
-            pruned_im,
-            im_name,
-            output_path,
-            resolution,
-            window_size,
-            window_unit,
-            test,
-            within_element,
-        )
-        pbar.update(1)
+            # analyze
+            im_df = analyze_all_curv(
+                pruned_im,
+                im_name,
+                output_path,
+                resolution,
+                window_size,
+                window_unit,
+                test,
+                within_element,
+            )
+            pbar.update(1)
 
-        return im_df
+            return im_df
+            
+    except UnidentifiedImageError as e:
+        logger.error(f"Cannot process image file {input_file}: {e}")
+        raise
+    except FileNotFoundError as e:
+        logger.error(f"Image file not found: {input_file}")
+        raise
+    except Exception as e:
+        logger.error(f"Error processing image {input_file}: {e}")
+        raise

@@ -121,6 +121,10 @@ def curvature(
 
     file_list = list_images(input_directory)
     logger.info(f"Found {len(file_list)} images to analyze")
+    
+    if not file_list:
+        logger.error(f"No valid TIFF images found in {input_directory}")
+        raise ValueError(f"No valid TIFF images found in {input_directory}")
 
     with tqdm_joblib(
         tqdm(desc="curvature", total=len(file_list), unit="files", miniters=1)
@@ -139,6 +143,13 @@ def curvature(
             )
             for input_file in file_list
         )
+
+    # Filter out any None results from failed files
+    im_df = [df for df in im_df if df is not None]
+    
+    if not im_df:
+        logger.error("No images were successfully processed")
+        raise RuntimeError("No images were successfully processed")
 
     summary_df = pd.concat(im_df)
 
