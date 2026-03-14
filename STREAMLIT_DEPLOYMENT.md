@@ -99,3 +99,64 @@ For issues related to:
 - **Deployment**: Check Streamlit Cloud documentation
 - **fibermorph functionality**: Open an issue on GitHub
 - **GUI features**: Open an issue on GitHub with "GUI" label
+
+---
+
+## Deploy to Hugging Face Spaces (Docker)
+
+Hugging Face recommends Docker Spaces for Streamlit apps. This repository is now configured for that workflow.
+
+### Required files
+
+- **`Dockerfile`**: Container build and startup definition
+- **`README.md` YAML frontmatter**: Space metadata (`sdk: docker`, `app_port: 7860`)
+- **`.dockerignore`**: Excludes local/cache files from build context
+- **`streamlit_app.py`**: Streamlit entrypoint
+
+### 1) Build and run locally first
+
+```bash
+# Build image from repository root
+docker build -t fibermorph:latest .
+
+# Run container
+docker run --rm -p 7860:7860 fibermorph:latest
+```
+
+Open: `http://localhost:7860`
+
+### 2) Create a Docker Space on Hugging Face
+
+1. Go to <https://huggingface.co/new-space>
+2. Choose an owner and Space name
+3. Select **SDK: Docker**
+4. Choose visibility and hardware
+5. Create the Space
+
+### 3) Push the repository to the Space
+
+```bash
+# Clone your Space repo
+git clone https://huggingface.co/spaces/<username>/<space-name>
+cd <space-name>
+
+# Copy project files into the Space repo (or add HF as a remote from this repo)
+# Then commit and push
+git add .
+git commit -m "Deploy fibermorph Streamlit app via Docker"
+git push
+```
+
+Each push triggers an automatic rebuild and restart.
+
+### 4) Configure settings after first push
+
+- In **Space Settings**, add environment variables/secrets if needed.
+- Verify runtime logs in **Build logs** and **Container logs**.
+- Keep the app listening on port `7860` to match `app_port`.
+
+### 5) Operational notes
+
+- Free CPU Spaces can sleep when idle.
+- Storage is ephemeral across restarts unless persistent storage is configured.
+- If startup is slow, optimize image size and dependency install layers.
