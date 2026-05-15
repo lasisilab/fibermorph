@@ -20,6 +20,17 @@ short_description: Interactive toolkit for analyzing hair fiber morphology
 
 fibermorph provides powerful image analysis tools for studying hair curvature and cross-sections, with both an intuitive **graphical interface** and a command-line interface for advanced users.
 
+### What's new in v2.0
+- **SAM2 GPU segmentation** for cross-sections (optional; falls back to watershed on CPU)
+- **EFD + Hu moments + radial profile + shape classification** for cross-sections (`--extended-features`)
+- **Curl index, wave count, fiber diameter** from medial-axis skeleton (`--extended-curvature`)
+- **CLAHE preprocessing** for curvature images with uneven illumination (`--use-clahe`)
+- **5-tab Streamlit GUI**: Quick Test, Segmentation Preview, Batch (Cluster), Submit & Monitor, Results
+- **SLURM SBATCH script generation** directly from the GUI
+- **Batch pipeline** with per-sample aggregation (`hair_analysis_per_image.csv` + `hair_analysis_per_sample.csv`)
+- **18 publication-ready visualization figures**
+- **GPU Docker target** for container deployment with SAM2
+
 ## 🚀 Quick Start with the GUI (Recommended)
 
 The easiest way to use fibermorph is through the interactive web interface:
@@ -36,13 +47,12 @@ pip install "fibermorph[gui]"
 fibermorph-gui
 ```
 
-This opens an interactive web interface where you can:
-- 📤 **Upload images**: Single or multiple TIFF files, or provide a URL to download
-- 🔬 **Choose analysis type**: Curvature or Section analysis  
-- ⚙️ **Configure parameters**: Adjust settings with interactive controls
-- 💾 **Download results**: Get CSV summary data and ZIP file with all analysis outputs
-
-**✨ Try it online**: [https://fibermorph.streamlit.app/](https://fibermorph.streamlit.app/)
+The 5-tab interface provides:
+- **Quick Test**: upload images and run analysis immediately (no SLURM needed)
+- **Segmentation**: review input/mask/overlay for cross-section images
+- **Batch (Cluster)**: configure settings and generate an SBATCH script
+- **Submit & Monitor**: submit the script and watch live job status
+- **Results**: load CSVs and explore 18 publication-ready figures
 
 ## 📦 Installation
 
@@ -60,65 +70,114 @@ pip install "fibermorph[gui]"
 ### Alternative: pip with virtual environment
 
 ```bash
-# Create virtual environment
 python3.11 -m venv fibermorph_env
-
-# Activate the environment
-# On macOS/Linux:
-source fibermorph_env/bin/activate
-# On Windows:
-fibermorph_env\Scripts\activate
-
-# Install fibermorph with GUI
+source fibermorph_env/bin/activate   # macOS/Linux
+# fibermorph_env\Scripts\activate    # Windows
 pip install "fibermorph[gui]"
 ```
 
-**Supported Python versions:** 3.10, 3.11, 3.12. We recommend Python 3.11 for the best compatibility.
-
-> **Note**: Python 3.13 support is planned but not yet available due to dependency compatibility issues.
+**Supported Python versions:** 3.10, 3.11, 3.12. Python 3.11 is recommended.
 
 ### Optional extras
 
 ```bash
-pip install "fibermorph[raw]"    # enable RAW image conversion via rawpy
-pip install "fibermorph[viz]"    # install matplotlib-based visualization helpers
-pip install "fibermorph[gui]"    # install Streamlit GUI (recommended!)
+pip install "fibermorph[raw]"        # RAW image conversion (rawpy)
+pip install "fibermorph[viz]"        # matplotlib + seaborn visualization helpers
+pip install "fibermorph[gui]"        # Streamlit GUI (recommended)
+pip install "fibermorph[raw,gui]"    # combine extras
 ```
 
-Extras can be combined, e.g. `pip install "fibermorph[raw,viz,gui]"`.
+### SAM2 GPU segmentation (optional)
 
-## 🖥️ Command Line Interface (Advanced Users)
+SAM2 is not on PyPI and must be installed separately. It is only required if you use `--use-sam2`.
 
-For automation, scripting, and batch processing, fibermorph provides a powerful CLI:
+```bash
+pip install git+https://github.com/facebookresearch/segment-anything-2
+
+# Download a checkpoint (tiny model is fastest):
+mkdir -p fibermorph/checkpoints
+wget -O fibermorph/checkpoints/sam2.1_hiera_tiny.pt \
+  https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt
+```
+
+Without SAM2, fibermorph automatically falls back to the watershed segmentation path — no crash, no manual intervention required.
+
+## 🐳 Docker
+
+### CPU-only (default)
+
+```bash
+docker build --target cpu -t fibermorph:cpu .
+docker run -p 7860:7860 fibermorph:cpu
+# Open http://localhost:7860 in your browser
+```
+
+### GPU (SAM2 + CUDA)
+
+```bash
+docker build --target gpu -t fibermorph:gpu .
+docker run --gpus all -p 7860:7860 fibermorph:gpu
+```
+
+## 🖥️ Command Line Interface
 
 ### Quick test with demo data
 
 ```bash
-fibermorph --demo_real_curv --output_directory ~/fibermorph_demo_curv
+fibermorph --demo_real_curv    --output_directory ~/fibermorph_demo_curv
 fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ```
 
-### Analyze your own data
+### Curvature analysis
 
-**Curvature analysis:**
 ```bash
+# Basic (same as v1):
 fibermorph --curvature \
   --input_directory /path/to/images \
   --output_directory /path/to/results \
   --resolution_mm 132 \
-  --jobs 2
+  --jobs 4
+
+# With new v2 options:
+fibermorph --curvature \
+  --input_directory /path/to/images \
+  --output_directory /path/to/results \
+  --resolution_mm 132 \
+  --use-clahe \
+  --extended-curvature \
+  --jobs 4
 ```
 
-**Section analysis:**
+New curvature flags:
+- `--use-clahe` — CLAHE contrast enhancement before Frangi ridge filter
+- `--extended-curvature` — adds `curl_index`, `wave_count`, `diameter_mean_mu`, `curv_std`, `curv_cv`, `curv_iqr` columns
+
+### Section analysis
+
 ```bash
+# Basic (same as v1):
 fibermorph --section \
   --input_directory /path/to/images \
   --output_directory /path/to/results \
-  --minsize 30 \
-  --maxsize 180 \
   --resolution_mu 4.25 \
-  --jobs 2
+  --minsize 20 --maxsize 150 \
+  --jobs 4
+
+# With SAM2 GPU segmentation and extended features:
+fibermorph --section \
+  --input_directory /path/to/images \
+  --output_directory /path/to/results \
+  --resolution_mu 4.25 \
+  --use-sam2 --sam2-checkpoint fibermorph/checkpoints/sam2.1_hiera_tiny.pt \
+  --extended-features \
+  --jobs 4
 ```
+
+New section flags:
+- `--use-sam2` — enable SAM2 segmentation (requires GPU + SAM2 installed; falls back to watershed automatically)
+- `--sam2-checkpoint PATH` — path to SAM2 `.pt` weights file
+- `--sam2-cfg PATH` — path to SAM2 model config YAML (optional; uses bundled default)
+- `--extended-features` — adds EFD (40 coefficients), Hu moments (7), radial profile (7 metrics), `shape_class`
 
 ## Install the package
 

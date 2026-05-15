@@ -244,6 +244,44 @@ def segment_section(
     return section_data, bin_im
 
 
+def section_props_extended(
+    mask_uint8: np.ndarray,
+    im_name: str,
+    resolution: float,
+) -> pd.DataFrame:
+    """Extract extended shape features from a segmented hair cross-section mask.
+
+    Calls shape_analysis.extract_features_from_array() for EFD, Hu moments,
+    and radial profile features in addition to the basic geometric metrics.
+
+    Parameters
+    ----------
+    mask_uint8 : 2D uint8 binary mask (0/255)
+    im_name    : image name used as the ID column
+    resolution : pixels per µm
+
+    Returns
+    -------
+    pd.DataFrame
+        One-row DataFrame with all extracted features (or NaN on failure).
+    """
+    from ..core.shape_analysis import extract_features_from_array, classify_shape
+
+    feat = extract_features_from_array(
+        mask_uint8,
+        resolution_mu=resolution,
+        source_name=im_name,
+    )
+    if feat is None:
+        return pd.DataFrame({"ID": [im_name]})
+
+    shape_class = classify_shape(feat)
+    feat["shape_class"] = shape_class
+    feat["ID"]          = im_name
+
+    return pd.DataFrame([feat])
+
+
 def save_sections(
     output_path: Union[str, pathlib.Path],
     im_name: str,
