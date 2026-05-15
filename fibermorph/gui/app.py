@@ -120,8 +120,8 @@ def _process_section_gui(
         min_diam=min_diam,
         max_diam=max_diam,
         use_sam2=use_sam2,
-        sam2_checkpoint=sam2_checkpoint,
-        sam2_cfg="",
+        checkpoint=sam2_checkpoint,
+        model_cfg="",
     )
     if seg_result is None:
         return None
