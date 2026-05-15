@@ -66,7 +66,7 @@ class TestSectionSeq:
             save_img=False, use_sam2=False, extended_features=True,
         )
         if df is not None and not df.empty:
-            hu_cols = [c for c in df.columns if c.startswith("hu_")]
+            hu_cols = [c for c in df.columns if c.startswith("hu")]
             assert len(hu_cols) == 7, "Extended features should include 7 Hu moment columns"
 
     def test_extended_features_adds_shape_class(self, tmp_path):
