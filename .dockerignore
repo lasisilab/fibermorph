@@ -1,0 +1,44 @@
+# VCS
+.git
+.gitignore
+.github/
+
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build/packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor/tooling
+.vscode/
+.idea/
+.DS_Store
+
+# Local data and outputs
+tmp/
+out/
+results/
+results_cache/
+*.zip
+
+# Optional: keep large or generated content out of image context
+Data/
+fibermorph/test_data/

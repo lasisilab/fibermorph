@@ -376,3 +376,80 @@ def window_iter(
     else:
         logger.warning("Window size is None, returning empty DataFrame")
         return pd.DataFrame()
+
+
+# ---------------------------------------------------------------------------
+# New extended metrics: curl index, wave count, arc-length from coords
+# ---------------------------------------------------------------------------
+
+def pixel_length_correction_coords(coords: np.ndarray) -> float:
+    """Compute arc length of an ordered pixel path via Euclidean inter-pixel distances.
+
+    Accepts coordinate arrays (N, 2) directly, unlike the regionprops-based
+    pixel_length_correction in processing/geometry.py.
+    """
+    pts = np.asarray(coords, dtype=np.float64)
+    if len(pts) < 2:
+        return float(len(pts))
+    diffs = np.diff(pts, axis=0)
+    return float(np.sum(np.linalg.norm(diffs, axis=1)))
+
+
+def curl_index_from_skeleton(skel: np.ndarray, resolution_mm: float):
+    """Compute mean and std curl index (chord/arc ratio) across skeleton elements.
+
+    Parameters
+    ----------
+    skel         : 2D bool/uint8 skeleton image
+    resolution_mm: pixels per mm
+
+    Returns
+    -------
+    (curl_index_mean, curl_index_std, element_lengths_mm)
+    """
+    from scipy.ndimage import label as ndlabel
+    from skimage.measure import regionprops as sk_regionprops
+
+    labeled, _ = ndlabel(skel > 0)
+    props = sk_regionprops(labeled)
+
+    curl_vals = []
+    len_vals  = []
+    for region in props:
+        coords = region.coords
+        if len(coords) < 2:
+            continue
+        arc = pixel_length_correction_coords(coords) / resolution_mm
+        r0, c0 = coords[0]
+        r1, c1 = coords[-1]
+        chord = np.sqrt((r1 - r0) ** 2 + (c1 - c0) ** 2) / resolution_mm
+        if arc > 0:
+            curl_vals.append(chord / arc)
+            len_vals.append(arc)
+
+    if not curl_vals:
+        return float("nan"), float("nan"), []
+    return float(np.mean(curl_vals)), float(np.std(curl_vals)), len_vals
+
+
+def wave_count(curv_values: np.ndarray) -> int:
+    """Count peaks in a curvature trace using 10% mean prominence threshold.
+
+    Parameters
+    ----------
+    curv_values : array-like of curvature values (mm⁻¹)
+
+    Returns
+    -------
+    int — number of detected wave peaks
+    """
+    from scipy.signal import find_peaks as _find_peaks
+
+    arr = np.asarray(curv_values, dtype=np.float64)
+    if len(arr) < 3:
+        return 0
+    mean_val = float(np.nanmean(arr))
+    if mean_val == 0:
+        return 0
+    peaks, _ = _find_peaks(arr, prominence=mean_val * 0.10, distance=3)
+    return int(len(peaks))

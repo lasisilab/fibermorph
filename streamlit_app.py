@@ -1,5 +1,14 @@
-"""Entry point for Streamlit Cloud deployment."""
-from fibermorph.gui.app import main
+"""Entry point for Streamlit Cloud deployment.
 
-if __name__ == "__main__":
-    main()
+Runs fibermorph/gui/app.py via exec so Streamlit's re-run model works
+correctly (module imports are cached; exec re-executes every re-run).
+"""
+from pathlib import Path
+
+exec(  # noqa: S102
+    compile(
+        (Path(__file__).parent / "fibermorph" / "gui" / "app.py").read_text(),
+        "fibermorph/gui/app.py",
+        "exec",
+    )
+)
