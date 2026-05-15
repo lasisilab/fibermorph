@@ -31,11 +31,16 @@ def _wave_skel(n_waves: int = 3, width: int = 100, length: int = 200) -> np.ndar
 
 
 def _curved_skel(radius: int = 80, arc_fraction: float = 0.5) -> np.ndarray:
-    """Circular arc skeleton (arc_fraction of a full circle)."""
+    """Circular arc skeleton (arc_fraction of a full circle).
+
+    Uses enough sample points to guarantee a connected skeleton.
+    """
     size = radius * 3
     skel = np.zeros((size, size), dtype=bool)
     center = (size // 2, size // 2)
-    theta_range = np.linspace(0, 2 * np.pi * arc_fraction, int(radius * arc_fraction * 3))
+    # Use at least 4× the arc pixel-length to ensure adjacent pixels are set
+    n_pts = max(int(radius * arc_fraction * 2 * np.pi * 4), 500)
+    theta_range = np.linspace(0, 2 * np.pi * arc_fraction, n_pts)
     for t in theta_range:
         r = int(center[0] + radius * np.sin(t))
         c = int(center[1] + radius * np.cos(t))
@@ -60,8 +65,10 @@ class TestCurlIndex:
         curved   = _curved_skel(arc_fraction=0.5)
         ci_straight, _, _ = curl_index_from_skeleton(straight, resolution_mm=1.0)
         ci_curved,   _, _ = curl_index_from_skeleton(curved,   resolution_mm=1.0)
-        # Curved skeleton should have higher curl index than straight
-        assert ci_curved > ci_straight
+        # curl_index_from_skeleton returns chord/arc (straightness ratio).
+        # A curved arc has chord < arc, so its ratio is lower than a straight line (≈1).
+        assert not np.isnan(ci_curved), "Curved skeleton should not produce nan curl index"
+        assert ci_curved < ci_straight
 
     def test_returns_tuple_of_three(self):
         skel   = _straight_skel()

@@ -43,23 +43,24 @@ class TestComputeEFD:
     def test_returns_array_of_correct_shape(self):
         contour = _circle_contour()
         efd = compute_efd(contour, n_harmonics=10)
-        assert isinstance(efd, np.ndarray)
-        assert efd.shape == (10, 4)
+        assert isinstance(efd["efd_coeffs"], np.ndarray)
+        assert efd["efd_coeffs"].shape == (10, 4)
 
     def test_different_harmonics(self):
         contour = _circle_contour()
         for n in [5, 10, 20]:
             efd = compute_efd(contour, n_harmonics=n)
-            assert efd.shape[0] == n
+            assert efd["efd_coeffs"].shape[0] == n
 
     def test_circle_has_dominant_first_harmonic(self):
         contour = _circle_contour(radius=40, n_pts=360)
         efd = compute_efd(contour, n_harmonics=10)
-        first_mag = np.sqrt(efd[0, 0] ** 2 + efd[0, 1] ** 2 +
-                            efd[0, 2] ** 2 + efd[0, 3] ** 2)
+        coeffs = efd["efd_coeffs"]
+        first_mag = np.sqrt(coeffs[0, 0] ** 2 + coeffs[0, 1] ** 2 +
+                            coeffs[0, 2] ** 2 + coeffs[0, 3] ** 2)
         higher_mags = [
-            np.sqrt(efd[k, 0] ** 2 + efd[k, 1] ** 2 +
-                    efd[k, 2] ** 2 + efd[k, 3] ** 2)
+            np.sqrt(coeffs[k, 0] ** 2 + coeffs[k, 1] ** 2 +
+                    coeffs[k, 2] ** 2 + coeffs[k, 3] ** 2)
             for k in range(1, 10)
         ]
         assert first_mag > max(higher_mags)
@@ -67,7 +68,7 @@ class TestComputeEFD:
     def test_returns_finite_values(self):
         contour = _circle_contour()
         efd = compute_efd(contour, n_harmonics=10)
-        assert np.all(np.isfinite(efd))
+        assert np.all(np.isfinite(efd["efd_coeffs"]))
 
 
 # ─────────────────────────────────────────────
@@ -81,8 +82,8 @@ class TestComputeRadialProfile:
         props = regionprops(labeled)[0]
         result = compute_radial_profile(mask, props, n_angles=36, resolution_mu=4.25)
         expected = {
-            "radius_mean_mu", "radius_std_mu", "radius_min_mu",
-            "radius_max_mu", "radius_cv", "radius_range_mu", "asymmetry_index",
+            "radial_mean_mu", "radial_std_mu", "radial_min_mu",
+            "radial_max_mu", "radial_cv", "n_radial_peaks", "asymmetry_index",
         }
         assert expected.issubset(set(result.keys()))
 
@@ -101,7 +102,9 @@ class TestComputeRadialProfile:
         e_props = regionprops(label(ellipse_m))[0]
         c_res = compute_radial_profile(circle_mask, c_props, n_angles=36, resolution_mu=1.0)
         e_res = compute_radial_profile(ellipse_m,   e_props, n_angles=36, resolution_mu=1.0)
-        assert e_res["radius_range_mu"] > c_res["radius_range_mu"]
+        c_range = c_res["radial_max_mu"] - c_res["radial_min_mu"]
+        e_range = e_res["radial_max_mu"] - e_res["radial_min_mu"]
+        assert e_range > c_range
 
 
 # ─────────────────────────────────────────────
@@ -109,40 +112,39 @@ class TestComputeRadialProfile:
 # ─────────────────────────────────────────────
 class TestExtractFeaturesFromArray:
     def test_returns_dataframe_with_one_row(self):
-        import pandas as pd
         mask = _circle_mask()
-        df = extract_features_from_array(mask, "test_img", resolution=4.25, n_harmonics=10)
-        assert isinstance(df, pd.DataFrame)
-        assert len(df) == 1
+        result = extract_features_from_array(mask, source_name="test_img", resolution_mu=4.25, n_harmonics=10)
+        assert result is not None
+        assert isinstance(result, dict)
 
     def test_contains_geometric_columns(self):
         mask = _circle_mask()
-        df = extract_features_from_array(mask, "test_img", resolution=4.25, n_harmonics=10)
+        result = extract_features_from_array(mask, source_name="test_img", resolution_mu=4.25, n_harmonics=10)
         for col in ["area_mu2", "circularity", "eccentricity", "solidity"]:
-            assert col in df.columns, f"Missing column: {col}"
+            assert col in result, f"Missing key: {col}"
 
     def test_contains_efd_columns(self):
         mask = _circle_mask()
-        df = extract_features_from_array(mask, "test_img", resolution=4.25, n_harmonics=10)
-        efd_cols = [c for c in df.columns if c.startswith("efd_")]
-        assert len(efd_cols) == 40  # 10 harmonics × 4 coefficients
+        result = extract_features_from_array(mask, source_name="test_img", resolution_mu=4.25, n_harmonics=10)
+        efd_keys = [k for k in result if k.startswith("efd_")]
+        # 10 harmonics × 4 coefficients + 10 power values + 1 deviation score
+        assert len(efd_keys) == 51
 
     def test_contains_hu_moment_columns(self):
         mask = _circle_mask()
-        df = extract_features_from_array(mask, "test_img", resolution=4.25, n_harmonics=10)
-        hu_cols = [c for c in df.columns if c.startswith("hu_")]
-        assert len(hu_cols) == 7
+        result = extract_features_from_array(mask, source_name="test_img", resolution_mu=4.25, n_harmonics=10)
+        hu_keys = [k for k in result if k.startswith("hu")]
+        assert len(hu_keys) == 7
 
     def test_empty_mask_returns_nan_df(self):
-        import pandas as pd
         mask = np.zeros((50, 50), dtype=np.uint8)
-        df = extract_features_from_array(mask, "empty", resolution=4.25, n_harmonics=10)
-        assert isinstance(df, pd.DataFrame)
+        result = extract_features_from_array(mask, source_name="empty", resolution_mu=4.25, n_harmonics=10)
+        assert result is None
 
     def test_circle_has_high_circularity(self):
         mask = _circle_mask(radius=45)
-        df = extract_features_from_array(mask, "circle", resolution=1.0, n_harmonics=10)
-        assert df.iloc[0]["circularity"] > 0.85
+        result = extract_features_from_array(mask, source_name="circle", resolution_mu=1.0, n_harmonics=10)
+        assert result["circularity"] > 0.85
 
 
 # ─────────────────────────────────────────────
@@ -161,6 +163,8 @@ class TestClassifyShape:
             "solidity": 0.98,
             "aspect_ratio": 1.02,
             "convexity": 0.99,
+            "n_radial_peaks": 0,
+            "asymmetry_index": 0.02,
         }
 
     def _ellipse_features(self):
@@ -170,6 +174,8 @@ class TestClassifyShape:
             "solidity": 0.97,
             "aspect_ratio": 1.8,
             "convexity": 0.97,
+            "n_radial_peaks": 0,
+            "asymmetry_index": 0.05,
         }
 
     def _flattened_features(self):
@@ -179,6 +185,8 @@ class TestClassifyShape:
             "solidity": 0.96,
             "aspect_ratio": 3.5,
             "convexity": 0.95,
+            "n_radial_peaks": 0,
+            "asymmetry_index": 0.08,
         }
 
     def test_returns_string(self):
