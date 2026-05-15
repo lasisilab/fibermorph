@@ -1,2 +1,1 @@
-libgl1
-libglib2.0-0
+# opencv-python-headless requires no system GL libs — packages.txt intentionally empty.
