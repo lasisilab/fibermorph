@@ -1,4 +1,5 @@
 name: PR
+
 on:
   pull_request_target:
     types:
@@ -12,5 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v3.4.0
+        continue-on-error: true   # advisory in fork; lasisilab enforces this on the upstream PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,17 +1,4 @@
-﻿---
-title: fibermorph
-emoji: 🧬
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-python_version: 3.11
-fullWidth: true
-pinned: false
-short_description: Interactive toolkit for analyzing hair fiber morphology
----
-
-[![Test](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml/badge.svg)](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml) [![PyPI version](https://img.shields.io/pypi/v/fibermorph.svg)](https://pypi.org/project/fibermorph/)
+﻿[![Test](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml/badge.svg)](https://github.com/lasisilab/fibermorph/actions/workflows/test.yaml) [![PyPI version](https://img.shields.io/pypi/v/fibermorph.svg)](https://pypi.org/project/fibermorph/)
 
 
 # fibermorph
