@@ -89,73 +89,89 @@ class TestCopyIfExist:
         assert (dest_dir / "source.txt").exists()
 
 
+def _make_tiff(path):
+    """Write a minimal valid TIFF image (list_images verifies files with PIL)."""
+    from PIL import Image
+    Image.new("L", (4, 4)).save(path, format="TIFF")
+
+
 class TestListImages:
     """Tests for list_images function."""
-    
+
     def test_list_images_with_tif_files(self, tmp_path):
         """Test listing .tif files."""
         # Create test files
-        (tmp_path / "image1.tif").touch()
-        (tmp_path / "image2.tif").touch()
+        _make_tiff(tmp_path / "image1.tif")
+        _make_tiff(tmp_path / "image2.tif")
         (tmp_path / "other.txt").touch()
-        
+
         result = list_images(tmp_path)
         assert len(result) == 2
         assert all(p.suffix == ".tif" for p in result)
-    
+
     def test_list_images_with_tiff_files(self, tmp_path):
         """Test listing .tiff files."""
         # Create test files
-        (tmp_path / "image1.tiff").touch()
-        (tmp_path / "image2.tiff").touch()
-        
+        _make_tiff(tmp_path / "image1.tiff")
+        _make_tiff(tmp_path / "image2.tiff")
+
         result = list_images(tmp_path)
         assert len(result) == 2
         assert all(p.suffix == ".tiff" for p in result)
-    
+
     def test_list_images_with_mixed_extensions(self, tmp_path):
         """Test listing both .tif and .tiff files."""
         # Create test files
-        (tmp_path / "image1.tif").touch()
-        (tmp_path / "image2.tiff").touch()
+        _make_tiff(tmp_path / "image1.tif")
+        _make_tiff(tmp_path / "image2.tiff")
         (tmp_path / "image3.jpg").touch()
-        
+
         result = list_images(tmp_path)
         assert len(result) == 2
         assert all(p.suffix in [".tif", ".tiff"] for p in result)
-    
+
     def test_list_images_with_nested_directories(self, tmp_path):
         """Test listing images in nested directories."""
         # Create nested structure
         nested_dir = tmp_path / "subdir"
         nested_dir.mkdir()
-        (tmp_path / "image1.tif").touch()
-        (nested_dir / "image2.tif").touch()
-        
+        _make_tiff(tmp_path / "image1.tif")
+        _make_tiff(nested_dir / "image2.tif")
+
         result = list_images(tmp_path)
         assert len(result) == 2
-    
+
     def test_list_images_with_empty_directory(self, tmp_path):
         """Test listing images in empty directory."""
         result = list_images(tmp_path)
         assert len(result) == 0
         assert isinstance(result, list)
-    
+
+    def test_list_images_skips_invalid_image_files(self, tmp_path):
+        """Files with a .tif extension that are not real images are excluded."""
+        _make_tiff(tmp_path / "valid.tif")
+        (tmp_path / "corrupt.tif").write_bytes(b"not a real tiff")
+        (tmp_path / "empty.tif").touch()
+        (tmp_path / "._appledouble.tif").write_bytes(b"\x00\x05\x16\x07")
+
+        result = list_images(tmp_path)
+        assert [p.name for p in result] == ["valid.tif"]
+
     def test_list_images_sorted(self, tmp_path):
         """Test that results are sorted."""
         # Create files in non-alphabetical order
-        (tmp_path / "c.tif").touch()
-        (tmp_path / "a.tif").touch()
-        (tmp_path / "b.tif").touch()
-        
+        _make_tiff(tmp_path / "c.tif")
+        _make_tiff(tmp_path / "a.tif")
+        _make_tiff(tmp_path / "b.tif")
+
         result = list_images(tmp_path)
         names = [p.name for p in result]
         assert names == sorted(names)
-    
+
     def test_list_images_with_string_path(self, tmp_path):
         """Test with string path instead of pathlib.Path."""
-        (tmp_path / "image1.tif").touch()
-        
+        _make_tiff(tmp_path / "image1.tif")
+
         result = list_images(str(tmp_path))
         assert len(result) == 1
         assert isinstance(result[0], pathlib.Path)
