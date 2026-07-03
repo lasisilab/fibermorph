@@ -1,9 +1,13 @@
 """GUI entry points for fibermorph."""
 
-from importlib import import_module
-
 
 def main() -> None:
-    """Launch the Streamlit application."""
-    app = import_module(".app", package=__name__)
-    app.main()
+    """Launch the Streamlit application.
+
+    The v2 app (fibermorph/gui/app.py) is a top-level Streamlit script
+    with no main() function, so it must be started through `streamlit
+    run`; delegate to the launcher, which does exactly that.
+    """
+    from .launcher import main as launch
+
+    launch()

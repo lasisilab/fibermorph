@@ -152,8 +152,10 @@ def curvature_seq(
                 if dist_map is not None:
                     rows, cols = np.where(pruned_bool)
                     if len(rows) > 0:
+                        # resolution is px/mm, so resolution_mu is µm per pixel;
+                        # dist_map radii are in pixels: convert px -> µm by multiplying
                         resolution_mu = 1000.0 / resolution
-                        diam = 2.0 * dist_map[rows, cols] / resolution_mu
+                        diam = 2.0 * dist_map[rows, cols] * resolution_mu
                         im_df["diameter_mean_mu"] = float(np.mean(diam))
                         mean_d = float(np.mean(diam))
                         im_df["diameter_cv"] = float(np.std(diam) / (mean_d + 1e-10))
