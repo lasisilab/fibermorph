@@ -79,6 +79,8 @@ def curvature(
     window_unit: str,
     save_img: bool,
     within_element: bool,
+    use_clahe: bool          = False,
+    extended_curvature: bool = False,
 ) -> bool:
     """Takes directory of grayscale tiff images and analyzes curvature for each curve/line.
 
@@ -110,7 +112,7 @@ def curvature(
     from .utils.timing import convert
     from .analysis.curvature_pipeline import curvature_seq
     from .analysis.parallel import tqdm_joblib
-    
+
     total_start = timer()
 
     # create an output directory for the analyses
@@ -121,7 +123,7 @@ def curvature(
 
     file_list = list_images(input_directory)
     logger.info(f"Found {len(file_list)} images to analyze")
-    
+
     if not file_list:
         logger.error(f"No valid TIFF images found in {input_directory}")
         raise ValueError(f"No valid TIFF images found in {input_directory}")
@@ -140,13 +142,15 @@ def curvature(
                 save_img,
                 test=False,
                 within_element=within_element,
+                use_clahe=use_clahe,
+                extended_curvature=extended_curvature,
             )
             for input_file in file_list
         )
 
     # Filter out any None results from failed files
     im_df = [df for df in im_df if df is not None]
-    
+
     if not im_df:
         logger.error("No images were successfully processed")
         raise RuntimeError("No images were successfully processed")
@@ -176,7 +180,11 @@ def section(
     resolution: float,
     minsize: float,
     maxsize: float,
-    save_img: bool
+    save_img: bool,
+    use_sam2: bool          = False,
+    sam2_checkpoint: str    = "",
+    sam2_cfg: str           = "",
+    extended_features: bool = False,
 ) -> bool:
     """Takes directory of grayscale images and analyzes cross-sectional properties.
 
@@ -206,7 +214,7 @@ def section(
     from .utils.timing import convert
     from .analysis.section_pipeline import section_seq
     from .analysis.parallel import tqdm_joblib
-    
+
     total_start = timer()
 
     file_list = list_images(input_directory)
@@ -222,7 +230,13 @@ def section(
     ) as progress_bar:
         progress_bar.monitor_interval = 2
         section_df = Parallel(n_jobs=jobs, verbose=0)(
-            delayed(section_seq)(f, output_path, resolution, minsize, maxsize, save_img)
+            delayed(section_seq)(
+                f, output_path, resolution, minsize, maxsize, save_img,
+                use_sam2=use_sam2,
+                sam2_checkpoint=sam2_checkpoint,
+                sam2_cfg=sam2_cfg,
+                extended_features=extended_features,
+            )
             for f in file_list
         )
 
@@ -239,4 +253,88 @@ def section(
     tqdm.write(f"\n\nComplete analysis took: {convert(total_time)}\n\n")
     logger.info(f"section completed in {convert(total_time)}")
 
+    return True
+
+
+def batch(
+    section_directory: Union[str, pathlib.Path, None],
+    curvature_directory: Union[str, pathlib.Path, None],
+    main_output_path: Union[str, pathlib.Path],
+    jobs: int                = 1,
+    resolution_mu: float     = 4.25,
+    resolution_mm: float     = 132.0,
+    minsize: float           = 30.0,
+    maxsize: float           = 150.0,
+    window_size: int         = 50,
+    window_unit: str         = "px",
+    save_img: bool           = False,
+    use_sam2: bool           = False,
+    sam2_checkpoint: str     = "",
+    sam2_cfg: str            = "",
+    extended_features: bool  = True,
+    extended_curvature: bool = True,
+    use_clahe: bool          = False,
+) -> bool:
+    """Run batch analysis on section and/or curvature image directories.
+
+    Produces hair_analysis_per_image.csv and hair_analysis_per_sample.csv
+    in a timestamped subdirectory of main_output_path.
+
+    Parameters
+    ----------
+    section_directory   : directory of cross-section images, or None to skip
+    curvature_directory : directory of curvature images, or None to skip
+    main_output_path    : parent directory for output
+    jobs                : parallel jobs
+    resolution_mu       : section resolution in µm/pixel
+    resolution_mm       : curvature resolution in pixels/mm
+    minsize / maxsize   : diameter filter in µm (section only)
+    window_size         : Taubin sliding window size in pixels
+    window_unit         : 'px' or 'mm'
+    save_img            : save intermediate images
+    use_sam2            : attempt SAM2 segmentation (falls back to watershed)
+    sam2_checkpoint     : path to SAM2 .pt weights file
+    sam2_cfg            : SAM2 model config yaml
+    extended_features   : EFD, Hu moments, radial profile, shape class (section)
+    extended_curvature  : curl_index, wave_count, diameter stats (curvature)
+    use_clahe           : CLAHE preprocessing for curvature
+
+    Returns
+    -------
+    bool — True on success
+    """
+    from .utils.filesystem import make_subdirectory
+    from .utils.timing import convert
+    from .pipeline.batch import run_batch
+
+    total_start = timer()
+
+    jetzt     = datetime.now()
+    timestamp = jetzt.strftime("%b%d_%H%M_")
+    out_dir   = make_subdirectory(main_output_path, append_name=str(timestamp + "fibermorph_batch"))
+
+    run_batch(
+        section_dir     = str(section_directory) if section_directory else None,
+        curv_dir        = str(curvature_directory) if curvature_directory else None,
+        output_dir      = str(out_dir),
+        resolution_mu   = resolution_mu,
+        resolution_mm   = resolution_mm,
+        min_diam        = minsize,
+        max_diam        = maxsize,
+        window_size     = window_size,
+        window_unit     = window_unit,
+        use_sam2        = use_sam2,
+        sam2_checkpoint = sam2_checkpoint,
+        sam2_cfg        = sam2_cfg,
+        save_img        = save_img,
+        extended_features   = extended_features,
+        extended_curvature  = extended_curvature,
+        use_clahe           = use_clahe,
+        jobs            = jobs,
+    )
+
+    total_end  = timer()
+    total_time = total_end - total_start
+    tqdm.write(f"\n\nBatch analysis took: {convert(total_time)}\n\n")
+    logger.info(f"batch completed in {convert(total_time)}")
     return True

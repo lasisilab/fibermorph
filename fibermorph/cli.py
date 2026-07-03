@@ -98,6 +98,24 @@ def parse_args():
         "of raw curvature measurements for each hair if the --within_element flag is included.",
     )
 
+    gr_curv.add_argument(
+        "--use-clahe",
+        action="store_true",
+        default=False,
+        dest="use_clahe",
+        help="Enable CLAHE contrast enhancement before Frangi ridge filter. "
+        "Improves results on images with uneven illumination.",
+    )
+
+    gr_curv.add_argument(
+        "--extended-curvature",
+        action="store_true",
+        default=False,
+        dest="extended_curvature",
+        help="Compute extended curvature metrics: curl_index, wave_count, "
+        "diameter_mean_mu, curv_std, curv_cv, curv_iqr.",
+    )
+
     gr_sect = parser.add_argument_group(
         "section options", "arguments used specifically for section module"
     )
@@ -124,6 +142,43 @@ def parse_args():
         metavar="",
         default=150,
         help="Integer. Maximum diameter in microns for sections. Default is 150.",
+    )
+
+    gr_sect.add_argument(
+        "--use-sam2",
+        action="store_true",
+        default=False,
+        dest="use_sam2",
+        help="Use SAM2 GPU segmentation for cross-sections. Falls back to watershed "
+        "automatically if SAM2 is not installed or no GPU is available. "
+        "Requires: pip install git+https://github.com/facebookresearch/segment-anything-2",
+    )
+
+    gr_sect.add_argument(
+        "--sam2-checkpoint",
+        type=str,
+        metavar="",
+        default="",
+        dest="sam2_checkpoint",
+        help="Path to SAM2 model checkpoint (.pt file). Only used with --use-sam2.",
+    )
+
+    gr_sect.add_argument(
+        "--sam2-cfg",
+        type=str,
+        metavar="",
+        default="",
+        dest="sam2_cfg",
+        help="Path to SAM2 model config YAML. Only used with --use-sam2.",
+    )
+
+    gr_sect.add_argument(
+        "--extended-features",
+        action="store_true",
+        default=False,
+        dest="extended_features",
+        help="Compute extended cross-section features: EFD (40 coefficients), "
+        "Hu moments (7), radial distance profile (7), and shape classification.",
     )
 
     gr_raw = parser.add_argument_group(
@@ -203,7 +258,7 @@ def parse_args():
 def main():
     """Main entry point for fibermorph CLI."""
     from .utils.filesystem import make_subdirectory
-    from .workflows import raw2gray, curvature, section
+    from .workflows import raw2gray, curvature, section, batch
     from . import demo
     
     args = parse_args()
@@ -230,6 +285,8 @@ def main():
             args.window_unit,
             args.save_image,
             args.within_element,
+            use_clahe=args.use_clahe,
+            extended_curvature=args.extended_curvature,
         )
     elif args.section is True:
         section(
@@ -240,6 +297,10 @@ def main():
             args.minsize,
             args.maxsize,
             args.save_image,
+            use_sam2=args.use_sam2,
+            sam2_checkpoint=args.sam2_checkpoint,
+            sam2_cfg=args.sam2_cfg,
+            extended_features=args.extended_features,
         )
     else:
         sys.exit("Error: No valid module selected")

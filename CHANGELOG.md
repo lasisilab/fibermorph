@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-05-14
+
+### Breaking Changes
+- Section analysis output now includes EFD (40 coefficients), Hu moments (7), radial profile (7 metrics), and `shape_class` columns when `--extended-features` is used
+- Curvature output includes `curl_index`, `wave_count`, `diameter_mean_mu`, `curv_std`, `curv_cv`, `curv_iqr` columns when `--extended-curvature` is used
+
+### Added
+- **SAM2 segmentation** (optional GPU): `--use-sam2` flag; falls back to watershed automatically when SAM2 is unavailable
+  - Install: `pip install git+https://github.com/facebookresearch/segment-anything-2`
+  - Checkpoint: place `sam2.1_hiera_tiny.pt` in `fibermorph/checkpoints/`
+- **Extended section features**: EFD (40 coefficients), Hu moments (7), radial distance profile (7 metrics + asymmetry index), shape classification into 7 morphotypes (`--extended-features`)
+- **CLAHE preprocessing** for curvature: `--use-clahe` flag improves results on images with uneven illumination
+- **Extended curvature metrics**: curl index (chord/arc ratio), wave count (peak detection), diameter statistics from medial axis (`--extended-curvature`)
+- **Multi-factor candidate scoring** for cross-section segmentation: center-bias + circularity + solidity + darkness
+- **Batch pipeline**: `fibermorph.workflows.batch()` produces `hair_analysis_per_image.csv` and `hair_analysis_per_sample.csv`
+- **Filename metadata parsing**: `{SAMPLEID}_{REGION}_{REPLICATE}` convention via `fibermorph.utils.metadata.parse_metadata()`
+- **5-tab Streamlit GUI**: Quick Test, Segmentation Preview, Batch (Cluster), Submit & Monitor, Results
+- **18 publication-ready visualization figures** via `fibermorph.gui.visualizations`
+- **SLURM SBATCH script generation** in the GUI Batch tab (calls `fibermorph` CLI)
+- **GPU Docker target**: two-stage CPU + GPU build (`docker build --target cpu` or `--target gpu`)
+- `opencv-python-headless` as a core dependency (required for headless server and container environments)
+- `seaborn` as an optional dependency (included in `[viz]` and `[gui]` extras)
+
+### Kept from v1
+- `raw2gray` RAW-to-grayscale conversion pipeline (unchanged)
+- Demo data download (`--demo_real_curv`, `--demo_real_section`)
+- `within_element` per-hair curvature CSV (`--within_element`)
+- Multi-window sweep: `--window_size` accepts a list of values
+- Taubin circle fitting core (`taubin_curv`)
+- `pixel_length_correction` (√2 diagonal arc-length correction)
+- Timestamped output directories
+- `--save_image` intermediate image saving
+- All existing CLI flags (backward compatible; new flags are additive and default to off)
+
 ## [1.0.1] - 2025-11-06
 
 ### Fixed

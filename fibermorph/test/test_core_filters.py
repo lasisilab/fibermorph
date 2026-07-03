@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from PIL import Image
-from fibermorph.core.filters import filter_curv
+from fibermorph.core.filters import filter_curv, filter_curv_clahe
 
 
 class TestFilterCurv:
@@ -89,5 +89,44 @@ class TestFilterCurv:
         test_img.save(img_path)
         
         filter_img, im_name = filter_curv(img_path, tmp_path, save_img=False)
-        
+
         assert im_name == "my_special_image"
+
+
+class TestFilterCurvClahe:
+    """Tests for filter_curv_clahe (CLAHE + Frangi + masked-ROI Otsu)."""
+
+    def test_returns_tuple(self, tmp_path):
+        img_path = tmp_path / "test_image.tif"
+        Image.new("L", (80, 80), color=128).save(img_path)
+        result = filter_curv_clahe(img_path, tmp_path, save_img=False)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+    def test_returns_uint8_binary(self, tmp_path):
+        img_path = tmp_path / "test_image.tif"
+        Image.new("L", (80, 80), color=128).save(img_path)
+        binary, im_name = filter_curv_clahe(img_path, tmp_path, save_img=False)
+        assert binary.dtype == np.uint8
+        assert set(np.unique(binary)).issubset({0, 255})
+
+    def test_preserves_dimensions(self, tmp_path):
+        img_path = tmp_path / "test_image.tif"
+        Image.new("L", (120, 90), color=128).save(img_path)
+        binary, _ = filter_curv_clahe(img_path, tmp_path, save_img=False)
+        assert binary.shape == (90, 120)
+
+    def test_extracts_correct_name(self, tmp_path):
+        img_path = tmp_path / "clahe_test.tif"
+        Image.new("L", (60, 60), color=128).save(img_path)
+        _, im_name = filter_curv_clahe(img_path, tmp_path, save_img=False)
+        assert im_name == "clahe_test"
+
+    def test_with_line_image(self, tmp_path):
+        img = np.ones((100, 100), dtype=np.uint8) * 200
+        img[50, :] = 30
+        img_path = tmp_path / "line.tif"
+        Image.fromarray(img, mode="L").save(img_path)
+        binary, im_name = filter_curv_clahe(img_path, tmp_path, save_img=False)
+        assert isinstance(binary, np.ndarray)
+        assert im_name == "line"

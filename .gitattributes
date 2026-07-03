@@ -1,0 +1,6 @@
+# Normalize line endings: text files always LF in the repo
+* text=auto eol=lf
+*.png binary
+*.tif binary
+*.tiff binary
+*.jpg binary
