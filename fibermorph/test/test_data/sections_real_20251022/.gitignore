@@ -1,0 +1,5 @@
+# Keep the ~10 MB scans local by default — do not bloat the repo/CI with them.
+# Force-add if you decide they should be committed:  git add -f *.tif
+*.tif
+*.tiff
+!README.md

@@ -225,12 +225,10 @@ with tab_quick:
         "For large batches use the **Batch (Cluster)** tab."
     )
     st.caption(
-        "**File naming (optional but recommended):** name files "
-        "`Individual_Sample_Side`, e.g. `Y_5_B.tif` — Individual (e.g. `Y`), "
-        "Sample number, and Side `A`/`B` for the two mirrored faces of one "
-        "section. Extra text after Side is ignored; missing fields are fine. "
-        "These labels are added as columns so you can group within/between "
-        "individual **downstream** — the app itself does no grouping."
+        "Each result row records its **source filename**. The app analyses one "
+        "image at a time and does no grouping — name your files however you'll "
+        "want to group them (within/between individual) in your own downstream "
+        "analysis."
     )
 
     col_sec, col_curv = st.columns(2)
@@ -265,8 +263,6 @@ with tab_quick:
         if not sec_uploads and not curv_uploads:
             st.error("Upload at least one image.")
         else:
-            from fibermorph.utils.metadata import parse_canonical_name
-
             rows            = []
             seg_store       = {}
             failed_sections = []
@@ -311,11 +307,8 @@ with tab_quick:
                         result = None
 
                     if result is not None:
-                        # Per-image row + lenient individual/sample/side labels
-                        # parsed from the filename (no grouping performed — the
-                        # labels are just columns for downstream analysis).
+                        # One per-image row, tagged with its source filename.
                         row = {"image_type": img_type, "source_file": uploaded.name}
-                        row.update(parse_canonical_name(uploaded.name))
                         if isinstance(result, dict):
                             row.update(result)
                         rows.append(row)
@@ -810,18 +803,15 @@ with tab_results:
     has_curv = "image_type" in per_image.columns and \
                (per_image["image_type"] == "curvature").any()
 
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Total images", len(per_image))
-    if "individual" in per_image.columns:
-        _indiv = per_image.loc[per_image["individual"].astype(str) != "", "individual"]
-        m2.metric("Unique individuals", _indiv.nunique())
     if has_sec:
-        m3.metric("Section images", int((per_image["image_type"] == "section").sum()))
+        m2.metric("Section images", int((per_image["image_type"] == "section").sum()))
     if has_curv:
-        m4.metric("Curvature images", int((per_image["image_type"] == "curvature").sum()))
+        m3.metric("Curvature images", int((per_image["image_type"] == "curvature").sum()))
 
-    st.caption("Per-image measurements only. Group within/between individual "
-               "downstream using the `individual` / `sample` / `side` columns.")
+    st.caption("Per-image measurements only. Each row carries its source "
+               "filename; do any within/between-individual grouping downstream.")
     st.divider()
 
     if has_sec:

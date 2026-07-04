@@ -1,10 +1,9 @@
 """Batch processor for section and/or curvature image directories.
 
 Produces one CSV in output_dir:
-  hair_analysis_per_image.csv   — one row per source image, with the source
-                                  filename and lenient individual/sample/side
-                                  labels parsed from it. No grouping/aggregation
-                                  is performed; that is left to downstream analysis.
+  hair_analysis_per_image.csv   — one row per source image, carrying the source
+                                  filename. No grouping/aggregation is performed;
+                                  that is left to downstream analysis.
 
 Section and curvature pipelines run independently; either can be omitted.
 """
@@ -19,7 +18,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from ..utils.metadata import collect_images, parse_canonical_name
+from ..utils.metadata import collect_images
 
 
 def _process_dir(
@@ -40,14 +39,12 @@ def _process_dir(
             # result may be a dict (extended) or a pd.DataFrame (legacy)
             if isinstance(result, dict):
                 row = {"image_type": image_type, "source_file": fname}
-                row.update(parse_canonical_name(fname))
                 row.update(result)
                 rows.append(row)
             elif isinstance(result, pd.DataFrame) and not result.empty:
                 row_dict = result.iloc[0].to_dict()
                 row_dict["image_type"]  = image_type
                 row_dict["source_file"] = fname
-                row_dict.update(parse_canonical_name(fname))
                 rows.append(row_dict)
             else:
                 failed += 1
@@ -192,10 +189,9 @@ def run_batch(
 
     per_image = pd.DataFrame(all_rows)
 
-    # Label columns first (parsed leniently from the filename; the pipeline does
-    # NOT group by them — grouping is left to the user's downstream analysis).
-    meta_cols    = ["individual", "sample", "side", "image_type",
-                    "source_file", "segmentation_method"]
+    # Identifier columns first. The source filename is recorded as-is; any
+    # grouping (within/between individual) is left to downstream analysis.
+    meta_cols    = ["source_file", "image_type", "segmentation_method"]
     present_meta = [c for c in meta_cols if c in per_image.columns]
     other_cols   = [c for c in per_image.columns if c not in present_meta]
     per_image    = per_image[present_meta + other_cols]

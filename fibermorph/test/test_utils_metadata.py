@@ -5,45 +5,7 @@ import tempfile
 
 import pytest
 
-from fibermorph.utils.metadata import parse_canonical_name, collect_images
-
-
-class TestParseCanonicalName:
-    """Tests for the lenient canonical Individual_Sample_Side parser."""
-
-    def test_full_convention(self):
-        result = parse_canonical_name("Y_5_B.tif")
-        assert result == {"individual": "Y", "sample": "5", "side": "B"}
-
-    def test_strips_path_and_extension(self):
-        result = parse_canonical_name("/some/path/P_3_A.tiff")
-        assert result["individual"] == "P"
-        assert result["sample"] == "3"
-        assert result["side"] == "A"
-
-    def test_extra_tokens_are_dropped(self):
-        # trailing acquisition info after Side is ignored
-        result = parse_canonical_name("Y_5_B_12.5mag.tif")
-        assert result == {"individual": "Y", "sample": "5", "side": "B"}
-
-    def test_missing_side(self):
-        result = parse_canonical_name("Y_5.tif")
-        assert result == {"individual": "Y", "sample": "5", "side": ""}
-
-    def test_missing_sample_and_side(self):
-        result = parse_canonical_name("Y.tif")
-        assert result == {"individual": "Y", "sample": "", "side": ""}
-
-    def test_non_conforming_name_still_parses(self):
-        # never raises; whatever precedes the first underscore is the individual
-        result = parse_canonical_name("randomname.tif")
-        assert result["individual"] == "randomname"
-        assert result["sample"] == ""
-        assert result["side"] == ""
-
-    def test_always_returns_three_keys(self):
-        result = parse_canonical_name("anything.tif")
-        assert set(result) == {"individual", "sample", "side"}
+from fibermorph.utils.metadata import collect_images
 
 
 class TestCollectImages:

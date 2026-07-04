@@ -1,8 +1,8 @@
 """Unit tests for pipeline.batch — per-image output with canonical labels.
 
 The batch pipeline no longer aggregates per sample; it emits one row per source
-image (with the filename and lenient individual/sample/side labels) and leaves
-grouping to downstream analysis.
+image (carrying the source filename) and leaves all grouping to downstream
+analysis.
 """
 
 import os
@@ -48,7 +48,7 @@ class TestRunBatchPerImage:
         assert (out_dir / "hair_analysis_per_image.csv").exists()
         assert not (out_dir / "hair_analysis_per_sample.csv").exists()
 
-    def test_labels_and_source_file_columns(self, tmp_path):
+    def test_source_file_recorded_no_grouping_columns(self, tmp_path):
         sec_dir = tmp_path / "sections"
         out_dir = tmp_path / "out"
         sec_dir.mkdir()
@@ -62,12 +62,9 @@ class TestRunBatchPerImage:
         )
         row = result.iloc[0]
         assert row["source_file"] == "Y_5_B.tiff"
-        assert row["individual"] == "Y"
-        assert row["sample"] == "5"
-        assert row["side"] == "B"
-        # no legacy grouping columns
-        for legacy in ("sample_id", "region", "replicate"):
-            assert legacy not in result.columns
+        # the app does not parse filenames into grouping columns
+        for col in ("individual", "sample", "side", "sample_id", "region", "replicate"):
+            assert col not in result.columns
 
     def test_empty_input_returns_empty_dataframe(self, tmp_path):
         sec_dir = tmp_path / "sections"
