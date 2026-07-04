@@ -39,7 +39,8 @@ def curvature_seq(
     test                : running under test suite (skips some I/O)
     within_element      : save per-hair curvature CSV distributions
     use_clahe           : CLAHE preprocessing (improved contrast handling)
-    extended_curvature  : compute curl_index, wave_count, diameter, std, CV, IQR
+    extended_curvature  : compute curl_index, curl_index_std, wave_count,
+                          wave_count_per_mm, length_total
 
     Returns
     -------
@@ -94,13 +95,12 @@ def curvature_seq(
             # Step 4 — Skeletonize
             # ----------------------------------------------------------------
             if extended_curvature:
-                # Medial-axis skeleton also returns a distance map for diameter stats
+                # Medial-axis skeleton (matches the extended curl-index path)
                 from skimage.morphology import medial_axis
-                skel_bool, dist_map = medial_axis(clean_im > 0, return_distance=True)
+                skel_bool = medial_axis(clean_im > 0)
                 skeleton_im = (skel_bool * 255).astype(np.uint8)
             else:
                 skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
-                dist_map    = None
             pbar.update(1)
 
             # ----------------------------------------------------------------
@@ -147,18 +147,6 @@ def curvature_seq(
                     wc / (total_length_mm + 1e-10) if not np.isnan(total_length_mm) else float("nan")
                 )
                 im_df["length_total"] = total_length_mm
-
-                # Fiber diameter from medial-axis distance map
-                if dist_map is not None:
-                    rows, cols = np.where(pruned_bool)
-                    if len(rows) > 0:
-                        # resolution is px/mm, so resolution_mu is µm per pixel;
-                        # dist_map radii are in pixels: convert px -> µm by multiplying
-                        resolution_mu = 1000.0 / resolution
-                        diam = 2.0 * dist_map[rows, cols] * resolution_mu
-                        im_df["diameter_mean_mu"] = float(np.mean(diam))
-                        mean_d = float(np.mean(diam))
-                        im_df["diameter_cv"] = float(np.std(diam) / (mean_d + 1e-10))
 
             pbar.update(1)
             return im_df

@@ -536,10 +536,9 @@ with tab_curv:
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
         curv_ext = st.toggle(
             "Show extended (experimental) metrics", value=False, key="curv_ext",
-            help="Curl index, wave count, and fibre diameter. These were added in "
-                 "the v2 student fork and are NOT part of the published fibermorph "
-                 "curvature method — treat them as experimental. (Diameter is "
-                 "medial-axis / skeleton based, consistent with the method.)")
+            help="Curl index and wave count. These were added in the v2 student "
+                 "fork and are NOT part of the published fibermorph curvature "
+                 "method — treat them as experimental.")
 
     if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
         if _source_is_empty(curv_source):
@@ -584,7 +583,7 @@ with tab_curv:
                         if curv_ext:
                             ir = (result or {}).get("image_row", {}) or {}
                             for k in ("curl_index", "wave_count",
-                                      "wave_count_per_mm", "diameter_mean_mu"):
+                                      "wave_count_per_mm"):
                                 if k in ir:
                                     summ[k] = ir[k]
                         summ_rows.append(summ)
@@ -659,7 +658,6 @@ with tab_curv:
                 "curl_index":        "Curl Index (v2)",
                 "wave_count":        "Wave Count (v2)",
                 "wave_count_per_mm": "Waves/mm (v2)",
-                "diameter_mean_mu":  "Diameter µm (v2)",
             }
             spresent = {k: v for k, v in summ_labels.items() if k in summ_df.columns}
             fmt = {v: "{:.4f}" for k, v in spresent.items()
@@ -813,7 +811,7 @@ with tab_hpc:
         resolution_mm   = resolution_to_px_per_unit(curv_res_val_b, curv_res_unit_b)
         st.caption(f"Script will pass **--resolution_mm {resolution_mm:.4g}** (px/mm).")
         ext_curvature = st.toggle(
-            "Extended curvature metrics (curl index, wave count, diameter stats)", value=True
+            "Extended curvature metrics (curl index, wave count)", value=True
         )
 
     with st.expander("SLURM settings", expanded=False):

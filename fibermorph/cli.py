@@ -122,8 +122,8 @@ def parse_args():
         action="store_true",
         default=False,
         dest="extended_curvature",
-        help="Compute extended curvature metrics: curl_index, wave_count, "
-        "diameter_mean_mu, curv_std, curv_cv, curv_iqr.",
+        help="Compute extended curvature metrics: curl_index, curl_index_std, "
+        "wave_count, wave_count_per_mm, length_total.",
     )
 
     gr_sect = parser.add_argument_group(

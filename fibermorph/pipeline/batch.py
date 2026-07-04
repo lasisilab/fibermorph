@@ -92,7 +92,7 @@ def run_batch(
     sam2_cfg            : SAM2 model config yaml
     save_img            : save intermediate images
     extended_features   : compute EFD, Hu moments, radial profile, shape class
-    extended_curvature  : compute curl index, wave count, diameter stats
+    extended_curvature  : compute curl index, wave count, total length
     use_clahe           : CLAHE preprocessing for curvature
     jobs                : parallel jobs (passed to section/curvature if supported)
 

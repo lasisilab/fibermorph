@@ -296,7 +296,7 @@ def batch(
     sam2_checkpoint     : path to SAM2 .pt weights file
     sam2_cfg            : SAM2 model config yaml
     extended_features   : EFD, Hu moments, radial profile, shape class (section)
-    extended_curvature  : curl_index, wave_count, diameter stats (curvature)
+    extended_curvature  : curl_index, wave_count, length_total (curvature)
     use_clahe           : CLAHE preprocessing for curvature
 
     Returns
