@@ -109,10 +109,16 @@ def _process_section_gui(
     import cv2
     from fibermorph.processing.section_sam2 import segment_section
     from fibermorph.core.section import section_props_extended
+    from fibermorph.utils.imaging import downsample_to_resolution
 
     gray = cv2.imread(tmp_path, cv2.IMREAD_GRAYSCALE)
     if gray is None:
         return None
+
+    # Large scans carry far more pixels than a shape measurement needs. Downsample
+    # to the target working resolution and scale resolution_mu with it — the µm
+    # measurements are preserved (<0.5%) while processing is much lighter.
+    gray, resolution_mu = downsample_to_resolution(gray, resolution_mu)
 
     seg_result = segment_section(
         gray,
@@ -173,6 +179,33 @@ def _process_curvature_gui(
     return None
 
 
+def _metric_histograms(df, metrics, suptitle):
+    """Simple ungrouped histograms of the given (column, label) metrics.
+
+    Returns a matplotlib Figure, or None if no metric has 2+ values. This is a
+    per-image sanity view — not a grouped statistical analysis.
+    """
+    import matplotlib.pyplot as plt
+
+    series = [
+        (label, df[col].dropna())
+        for col, label in metrics
+        if col in df.columns and df[col].notna().sum() >= 2
+    ]
+    if not series:
+        return None
+    fig, axes = plt.subplots(1, len(series), figsize=(5 * len(series), 4))
+    if len(series) == 1:
+        axes = [axes]
+    for ax, (label, vals) in zip(axes, series):
+        ax.hist(vals, bins="auto", color="#4C72B0", edgecolor="white")
+        ax.set_xlabel(label)
+        ax.set_ylabel("Count")
+    fig.suptitle(suptitle, fontsize=12, fontweight="bold")
+    fig.tight_layout()
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
@@ -190,6 +223,14 @@ with tab_quick:
         "Upload up to ~20 images directly from your computer. "
         "Analysis runs immediately on this server (no SBATCH). "
         "For large batches use the **Batch (Cluster)** tab."
+    )
+    st.caption(
+        "**File naming (optional but recommended):** name files "
+        "`Individual_Sample_Side`, e.g. `Y_5_B.tif` — Individual (e.g. `Y`), "
+        "Sample number, and Side `A`/`B` for the two mirrored faces of one "
+        "section. Extra text after Side is ignored; missing fields are fine. "
+        "These labels are added as columns so you can group within/between "
+        "individual **downstream** — the app itself does no grouping."
     )
 
     col_sec, col_curv = st.columns(2)
@@ -224,6 +265,8 @@ with tab_quick:
         if not sec_uploads and not curv_uploads:
             st.error("Upload at least one image.")
         else:
+            from fibermorph.utils.metadata import parse_canonical_name
+
             rows            = []
             seg_store       = {}
             failed_sections = []
@@ -268,10 +311,11 @@ with tab_quick:
                         result = None
 
                     if result is not None:
-                        # No filename-based grouping: emit one row of per-image
-                        # measurements. Group within/between individual downstream
-                        # from the CSV — the app makes no assumptions about names.
+                        # Per-image row + lenient individual/sample/side labels
+                        # parsed from the filename (no grouping performed — the
+                        # labels are just columns for downstream analysis).
                         row = {"image_type": img_type, "source_file": uploaded.name}
+                        row.update(parse_canonical_name(uploaded.name))
                         if isinstance(result, dict):
                             row.update(result)
                         rows.append(row)
@@ -304,7 +348,6 @@ with tab_quick:
     # ---- Display results ----
     if st.session_state["quick_results"] is not None:
         import matplotlib.pyplot as plt
-        from fibermorph.gui.visualizations import section_figures, curvature_figures
 
         df       = st.session_state["quick_results"]
         has_sec  = "image_type" in df.columns and (df["image_type"] == "section").any()
@@ -359,38 +402,37 @@ with tab_quick:
                 use_container_width=True,
             )
 
-        # Distribution figures summarise across images, so they need 2+ of a type.
-        # The grouping-dependent figures (Comparison / Variability) are skipped —
-        # the app no longer parses filenames into individual/sample groups.
-        _skip_groups = {"Comparison", "Variability"}
-
+        # One simple, ungrouped distribution per image type — shown only with
+        # 2+ images. This is image analysis, not data analysis: grouped stats
+        # (within/between individual) belong in your own downstream tools using
+        # the per-image CSV.
         if has_sec:
             if len(sec_df) >= 2:
-                st.markdown("**Cross-Section Figures** — distributions across the uploaded images")
-                for group, title, fig in section_figures(df):
-                    if group in _skip_groups:
-                        plt.close(fig)
-                        continue
-                    with st.expander(title, expanded=False):
-                        st.pyplot(fig)
+                fig = _metric_histograms(
+                    sec_df,
+                    [("area_mu2", "Area (µm²)"), ("eccentricity", "Eccentricity")],
+                    "Cross-Section — distribution across uploaded images",
+                )
+                if fig is not None:
+                    st.pyplot(fig)
                     plt.close(fig)
             else:
-                st.info("Upload 2 or more cross-section images to see distribution figures. "
-                        "The single-image measurements are in the table above and the CSV.")
+                st.info("Upload 2 or more cross-section images to see a distribution. "
+                        "The per-image measurements are in the table above and the CSV.")
 
         if has_curv:
             if len(curv_df) >= 2:
-                st.markdown("**Curvature Figures** — distributions across the uploaded images")
-                for group, title, fig in curvature_figures(df):
-                    if group in _skip_groups:
-                        plt.close(fig)
-                        continue
-                    with st.expander(title, expanded=False):
-                        st.pyplot(fig)
+                fig = _metric_histograms(
+                    curv_df,
+                    [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
+                    "Curvature — distribution across uploaded images",
+                )
+                if fig is not None:
+                    st.pyplot(fig)
                     plt.close(fig)
             else:
-                st.info("Upload 2 or more curvature images to see distribution figures. "
-                        "The single-image measurements are in the table above and the CSV.")
+                st.info("Upload 2 or more curvature images to see a distribution. "
+                        "The per-image measurements are in the table above and the CSV.")
 
         st.divider()
         st.download_button(
@@ -735,7 +777,6 @@ with tab_results:
 
     if st.button("🔄 Load Results"):
         per_image_path  = os.path.join(results_dir, "hair_analysis_per_image.csv")
-        per_sample_path = os.path.join(results_dir, "hair_analysis_per_sample.csv")
 
         # Also search inside timestamped subdirs produced by the batch workflow
         if not os.path.exists(per_image_path) and results_dir and os.path.isdir(results_dir):
@@ -747,8 +788,7 @@ with tab_results:
             for sub in subdirs:
                 candidate = sub / "hair_analysis_per_image.csv"
                 if candidate.exists():
-                    per_image_path  = str(candidate)
-                    per_sample_path = str(sub / "hair_analysis_per_sample.csv")
+                    per_image_path = str(candidate)
                     break
 
         if not os.path.exists(per_image_path):
@@ -756,18 +796,14 @@ with tab_results:
         else:
             st.session_state["per_image_df"]   = pd.read_csv(per_image_path)
             st.session_state["results_loaded"] = True
-            if os.path.exists(per_sample_path):
-                st.session_state["per_sample_df"] = pd.read_csv(per_sample_path)
             st.success("Results loaded.")
 
     if not st.session_state.get("results_loaded"):
         st.stop()
 
     import matplotlib.pyplot as plt
-    from fibermorph.gui.visualizations import section_figures, curvature_figures, sample_figures
 
-    per_image  = st.session_state.get("per_image_df",  pd.DataFrame())
-    per_sample = st.session_state.get("per_sample_df", pd.DataFrame())
+    per_image = st.session_state.get("per_image_df", pd.DataFrame())
 
     has_sec  = "image_type" in per_image.columns and \
                (per_image["image_type"] == "section").any()
@@ -776,66 +812,50 @@ with tab_results:
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Total images", len(per_image))
-    if "sample_id" in per_image.columns:
-        m2.metric("Unique samples", per_image["sample_id"].nunique())
+    if "individual" in per_image.columns:
+        _indiv = per_image.loc[per_image["individual"].astype(str) != "", "individual"]
+        m2.metric("Unique individuals", _indiv.nunique())
     if has_sec:
         m3.metric("Section images", int((per_image["image_type"] == "section").sum()))
     if has_curv:
         m4.metric("Curvature images", int((per_image["image_type"] == "curvature").sum()))
 
+    st.caption("Per-image measurements only. Group within/between individual "
+               "downstream using the `individual` / `sample` / `side` columns.")
     st.divider()
 
     if has_sec:
-        st.subheader("Cross-Section Shape Analysis")
-        _last_group: str | None = None
-        for group, title, fig in section_figures(per_image):
-            if group != _last_group:
-                st.markdown(f"**{group}**")
-                _last_group = group
-            with st.expander(title, expanded=(group == "Overview")):
+        sec_df = per_image[per_image["image_type"] == "section"]
+        st.subheader("Cross-Section — per-image measurements")
+        st.dataframe(sec_df.dropna(axis=1, how="all"), use_container_width=True)
+        if len(sec_df) >= 2:
+            fig = _metric_histograms(
+                sec_df, [("area_mu2", "Area (µm²)"), ("eccentricity", "Eccentricity")],
+                "Cross-Section — distribution across images",
+            )
+            if fig is not None:
                 st.pyplot(fig)
                 plt.close(fig)
 
     if has_curv:
+        curv_df = per_image[per_image["image_type"] == "curvature"]
         st.divider()
-        st.subheader("Curvature Analysis")
-        _last_group = None
-        for group, title, fig in curvature_figures(per_image):
-            if group != _last_group:
-                st.markdown(f"**{group}**")
-                _last_group = group
-            with st.expander(title, expanded=(group == "Distributions")):
-                st.pyplot(fig)
-                plt.close(fig)
-
-    if not per_sample.empty:
-        st.divider()
-        st.subheader("Sample-Level Summary")
-        for _, title, fig in sample_figures(per_sample):
-            with st.expander(title, expanded=True):
+        st.subheader("Curvature — per-image measurements")
+        st.dataframe(curv_df.dropna(axis=1, how="all"), use_container_width=True)
+        if len(curv_df) >= 2:
+            fig = _metric_histograms(
+                curv_df, [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
+                "Curvature — distribution across images",
+            )
+            if fig is not None:
                 st.pyplot(fig)
                 plt.close(fig)
 
     st.divider()
-    with st.expander("Per-Image Data Table", expanded=False):
-        st.dataframe(per_image, use_container_width=True)
-    if not per_sample.empty:
-        with st.expander("Per-Sample Aggregated Table", expanded=False):
-            st.dataframe(per_sample, use_container_width=True)
-
-    st.divider()
-    dl1, dl2 = st.columns(2)
     if not per_image.empty:
-        dl1.download_button(
+        st.download_button(
             "📥 Download per-image CSV",
             data=per_image.to_csv(index=False),
             file_name="hair_analysis_per_image.csv",
-            mime="text/csv",
-        )
-    if not per_sample.empty:
-        dl2.download_button(
-            "📥 Download per-sample CSV",
-            data=per_sample.to_csv(index=False),
-            file_name="hair_analysis_per_sample.csv",
             mime="text/csv",
         )
