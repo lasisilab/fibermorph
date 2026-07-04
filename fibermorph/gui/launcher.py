@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,11 +19,20 @@ def main() -> None:
         )
         sys.exit(1)
 
+    # Mark this as a LOCAL launch. The app uses this to unlock features that
+    # only make sense on the user's own machine — reading images straight from
+    # a folder on disk (no upload, no size limit).
+    os.environ.setdefault("FIBERMORPH_LOCAL", "1")
+
     # Get the path to the app.py file
     app_path = Path(__file__).parent / "app.py"
 
-    # Use streamlit's CLI to run the app
-    sys.argv = ["streamlit", "run", str(app_path)]
+    # Run the app locally with a high upload ceiling (browser uploads are only
+    # a hosted-app limitation; locally you can also use the folder-path input).
+    sys.argv = [
+        "streamlit", "run", str(app_path),
+        "--server.maxUploadSize", "5000",
+    ]
     sys.exit(stcli.main())
 
 

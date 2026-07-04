@@ -1,18 +1,23 @@
 """
 fibermorph/gui/app.py — fibermorph Streamlit interface
 ======================================================
-Three tabs:
+Four tabs:
 
-  Cross-Section    — upload cross-section images, segment and measure them
-                     in-process; results and mask previews appear inline.
+  Cross-Section    — segment and measure cross-section images in-process;
+                     per-image results and mask previews appear inline.
 
-  Curvature        — upload curvature images and measure them in-process;
-                     results appear inline.
+  Curvature        — measure curvature images in-process; per-fragment length
+                     and curvature (plus per-image summaries) appear inline.
 
-  Run Remote     — documentation + an SBATCH script scaffold for running the
-                     fibermorph CLI on your own workstation or HPC cluster. It
-                     generates a script to download and submit yourself; it does
-                     not submit anything or connect to any cluster.
+  Run Local        — how to install and launch this same GUI on your own
+                     machine (no upload limit; read images straight from a
+                     folder on disk). Those extra options appear automatically
+                     when launched via `fibermorph-gui`.
+
+  Run Remote       — documentation + an SBATCH script scaffold for running the
+                     fibermorph CLI on an HPC cluster. It generates a script to
+                     download and submit yourself; it does not submit anything
+                     or connect to any cluster.
 
 Start via:
   fibermorph-gui
@@ -43,8 +48,8 @@ st.set_page_config(
 st.title("🔬 fibermorph — Fiber Cross-Section & Curvature Analysis")
 st.caption(
     "Cross-section shape analysis (SAM2 / watershed) + curvature analysis. "
-    "Use the **Cross-Section** and **Curvature** tabs to analyse uploaded images, "
-    "or **Run Remote** to build an SBATCH script for the fibermorph CLI."
+    "Use **Cross-Section** and **Curvature** to analyse images; **Run Local** to "
+    "process large images on your own machine; **Run Remote** for a cluster job."
 )
 
 # ---------------------------------------------------------------------------
@@ -197,16 +202,90 @@ def _process_curvature_gui(
     return {"fragments": fragments, "image_row": image_row}
 
 
-def _warn_duplicate_names(uploads):
-    """Warn if any uploaded files share a filename (ambiguous source_file)."""
-    names = [u.name for u in uploads]
+def _warn_duplicate_names(names):
+    """Warn if any inputs share a filename (ambiguous source_file)."""
     dups = sorted({n for n in names if names.count(n) > 1})
     if dups:
         st.warning(
-            "Duplicate filenames uploaded — the `source_file` column will be "
-            "ambiguous for these (each file is still measured separately): "
-            + ", ".join(dups)
+            "Duplicate filenames — the `source_file` column will be ambiguous for "
+            "these (each file is still measured separately): " + ", ".join(dups)
         )
+
+
+# ---------------------------------------------------------------------------
+# Local mode: read images straight from a folder on disk (no upload, no size
+# cap). Only offered when the app was launched via `fibermorph-gui` on the
+# user's own machine — the hosted cloud app stays upload-only.
+# ---------------------------------------------------------------------------
+_LOCAL = os.environ.get("FIBERMORPH_LOCAL") == "1"
+
+
+def _list_folder_images(folder):
+    """Image files in a local folder matching the accepted upload types."""
+    import glob
+    if not folder or not os.path.isdir(folder):
+        return []
+    files = []
+    for ext in _UPLOAD_TYPES:
+        files += glob.glob(os.path.join(folder, f"*.{ext}"))
+        files += glob.glob(os.path.join(folder, f"*.{ext.upper()}"))
+    return sorted(set(files))
+
+
+def _render_input_picker(kind, key_prefix):
+    """Render the input control for an analysis tab.
+
+    Returns ("folder", path) or ("upload", uploaded_files). The folder option
+    only appears in local mode.
+    """
+    if _LOCAL:
+        mode = st.radio(
+            "Input source", ["Upload files", "Folder on disk"],
+            horizontal=True, key=f"{key_prefix}_mode",
+            help="Running locally — you can read images straight from a folder on "
+                 "this computer, with no upload and no file-size limit.",
+        )
+        if mode == "Folder on disk":
+            folder = st.text_input(
+                f"Folder containing {kind} images", placeholder="/path/to/images",
+                key=f"{key_prefix}_folder",
+            )
+            if folder:
+                n = len(_list_folder_images(folder))
+                st.caption(f"{n} image(s) found." if n
+                           else "No images found in that folder.")
+            return ("folder", folder)
+    ups = st.file_uploader(
+        f"Upload {kind} images (TIFF, PNG, JPG)", type=_UPLOAD_TYPES,
+        accept_multiple_files=True, key=f"{key_prefix}_uploads",
+    )
+    return ("upload", ups)
+
+
+def _gather_inputs(source, tmpdir):
+    """Turn a picker result into a list of (display_name, filepath).
+
+    Folder mode reads paths directly from disk; upload mode persists each
+    uploaded file into tmpdir first.
+    """
+    mode, payload = source
+    if mode == "folder":
+        return [(os.path.basename(p), p) for p in _list_folder_images(payload)]
+    out = []
+    for up in payload or []:
+        p = os.path.join(tmpdir, up.name)
+        with open(p, "wb") as fh:
+            fh.write(up.read())
+        out.append((up.name, p))
+    return out
+
+
+def _source_is_empty(source):
+    """True when a picker result has no images to process."""
+    mode, payload = source
+    if mode == "folder":
+        return not _list_folder_images(payload)
+    return not payload
 
 
 def _metric_histograms(df, metrics, suptitle):
@@ -242,8 +321,8 @@ def _metric_histograms(df, metrics, suptitle):
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_sec, tab_curv, tab_hpc = st.tabs(
-    ["🔬 Cross-Section", "🌀 Curvature", "🖥️ Run Remote"]
+tab_sec, tab_curv, tab_local, tab_hpc = st.tabs(
+    ["🔬 Cross-Section", "🌀 Curvature", "💻 Run Local", "🖥️ Run Remote"]
 )
 
 _FILENAME_NOTE = (
@@ -260,16 +339,13 @@ _UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 with tab_sec:
     st.header("Cross-Section Analysis")
     st.info(
-        "Upload cross-section images to segment and measure them immediately on "
-        "this server. For a whole study or very large images, use the "
-        "**Run Remote** tab."
+        "Segment and measure cross-section images here. For images too large to "
+        "upload, run this app locally (see **Run Local**); for a whole study on a "
+        "cluster, see **Run Remote**."
     )
     st.caption(_FILENAME_NOTE)
 
-    sec_uploads = st.file_uploader(
-        "Upload cross-section images (TIFF, PNG, JPG)", type=_UPLOAD_TYPES,
-        accept_multiple_files=True, key="sec_uploads",
-    )
+    sec_source = _render_input_picker("cross-section", "sec")
 
     with st.expander("Settings", expanded=False):
         c1, c2, c3, c4 = st.columns(4)
@@ -286,25 +362,23 @@ with tab_sec:
         sec_ckpt     = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
 
     if st.button("▶ Analyse cross-sections", type="primary", key="sec_run"):
-        if not sec_uploads:
-            st.error("Upload at least one cross-section image.")
+        if _source_is_empty(sec_source):
+            st.error("Provide at least one cross-section image.")
         else:
-            _warn_duplicate_names(sec_uploads)
-            rows            = []
-            seg_store       = []
-            failed_sections = []
-            progress        = st.progress(0, text="Processing…")
-
             with tempfile.TemporaryDirectory() as tmpdir:
-                for idx, uploaded in enumerate(sec_uploads):
-                    progress.progress(idx / len(sec_uploads),
-                                      text=f"Processing {uploaded.name}…")
-                    tmp_path = os.path.join(tmpdir, uploaded.name)
-                    with open(tmp_path, "wb") as fh:
-                        fh.write(uploaded.read())
+                sec_inputs = _gather_inputs(sec_source, tmpdir)
+                _warn_duplicate_names([n for n, _ in sec_inputs])
+                rows            = []
+                seg_store       = []
+                failed_sections = []
+                progress        = st.progress(0, text="Processing…")
+
+                for idx, (name, path) in enumerate(sec_inputs):
+                    progress.progress(idx / len(sec_inputs),
+                                      text=f"Processing {name}…")
                     try:
                         out = _process_section_gui(
-                            tmp_path,
+                            path,
                             resolution_mu=float(sec_res_mu),
                             min_diam=float(sec_min_d),
                             max_diam=float(sec_max_d),
@@ -313,39 +387,39 @@ with tab_sec:
                             return_mask=True,
                         )
                     except Exception as e:
-                        st.warning(f"{uploaded.name}: {e}")
+                        st.warning(f"{name}: {e}")
                         out = None
 
                     if out is not None:
                         result, gray_img, mask_img = out
-                        seg_store.append((uploaded.name, gray_img, mask_img))
-                        row = {"image_type": "section", "source_file": uploaded.name}
+                        seg_store.append((name, gray_img, mask_img))
+                        row = {"image_type": "section", "source_file": name}
                         row.update(result)
                         rows.append(row)
                     else:
-                        failed_sections.append(uploaded.name)
+                        failed_sections.append(name)
 
                 progress.progress(1.0, text="Done.")
 
-            if failed_sections:
-                st.warning(
-                    "No cross-section was detected in: "
-                    + ", ".join(failed_sections)
-                    + ".  If a cross-section is clearly present, the most common cause is the "
-                    "**Resolution** — it must be in **pixels per µm** (e.g. enter **5.556** "
-                    "for a 0.18 µm/pixel scale), not µm/pixel. Also check the min/max "
-                    "diameter range."
-                )
+                if failed_sections:
+                    st.warning(
+                        "No cross-section was detected in: "
+                        + ", ".join(failed_sections)
+                        + ".  If a cross-section is clearly present, the most common cause is the "
+                        "**Resolution** — it must be in **pixels per µm** (e.g. enter **5.556** "
+                        "for a 0.18 µm/pixel scale), not µm/pixel. Also check the min/max "
+                        "diameter range."
+                    )
 
-            if not rows:
-                # Clear any prior run's results so stale tables/masks don't linger.
-                st.session_state.pop("section_results", None)
-                st.session_state.pop("seg_store", None)
-                st.error("No cross-sections were measured.")
-            else:
-                st.session_state["section_results"] = pd.DataFrame(rows)
-                st.session_state["seg_store"]       = seg_store
-                st.success(f"Measured {len(rows)} / {len(sec_uploads)} cross-section(s).")
+                if not rows:
+                    # Clear any prior run's results so stale tables/masks don't linger.
+                    st.session_state.pop("section_results", None)
+                    st.session_state.pop("seg_store", None)
+                    st.error("No cross-sections were measured.")
+                else:
+                    st.session_state["section_results"] = pd.DataFrame(rows)
+                    st.session_state["seg_store"]       = seg_store
+                    st.success(f"Measured {len(rows)} / {len(sec_inputs)} cross-section(s).")
 
     # ---- Cross-section results ----
     sec_df = st.session_state.get("section_results")
@@ -432,15 +506,13 @@ with tab_sec:
 with tab_curv:
     st.header("Curvature Analysis")
     st.info(
-        "Upload curvature images to measure them immediately on this server. "
-        "For a whole study or very large images, use the **Run Remote** tab."
+        "Measure curvature images here. For images too large to upload, run this "
+        "app locally (see **Run Local**); for a whole study on a cluster, see "
+        "**Run Remote**."
     )
     st.caption(_FILENAME_NOTE)
 
-    curv_uploads = st.file_uploader(
-        "Upload curvature images (TIFF, PNG, JPG)", type=_UPLOAD_TYPES,
-        accept_multiple_files=True, key="curv_uploads",
-    )
+    curv_source = _render_input_picker("curvature", "curv")
 
     with st.expander("Settings", expanded=False):
         c1, c2, c3, c4 = st.columns(4)
@@ -470,40 +542,38 @@ with tab_curv:
                  "medial-axis / skeleton based, consistent with the method.)")
 
     if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
-        if not curv_uploads:
-            st.error("Upload at least one curvature image.")
+        if _source_is_empty(curv_source):
+            st.error("Provide at least one curvature image.")
         else:
-            _warn_duplicate_names(curv_uploads)
-            frag_frames = []
-            summ_rows   = []
-            failed      = []
-            progress = st.progress(0, text="Processing…")
             with tempfile.TemporaryDirectory() as tmpdir:
-                for idx, uploaded in enumerate(curv_uploads):
-                    progress.progress(idx / len(curv_uploads),
-                                      text=f"Processing {uploaded.name}…")
-                    tmp_path = os.path.join(tmpdir, uploaded.name)
-                    with open(tmp_path, "wb") as fh:
-                        fh.write(uploaded.read())
+                curv_inputs = _gather_inputs(curv_source, tmpdir)
+                _warn_duplicate_names([n for n, _ in curv_inputs])
+                frag_frames = []
+                summ_rows   = []
+                failed      = []
+                progress = st.progress(0, text="Processing…")
+                for idx, (name, path) in enumerate(curv_inputs):
+                    progress.progress(idx / len(curv_inputs),
+                                      text=f"Processing {name}…")
                     try:
                         result = _process_curvature_gui(
-                            tmp_path,
+                            path,
                             resolution_mm=float(curv_res_mm),
                             window_size=int(curv_window),
                             use_clahe=bool(curv_clahe),
                             extended=bool(curv_ext),
                         )
                     except Exception as e:
-                        st.warning(f"{uploaded.name}: {e}")
+                        st.warning(f"{name}: {e}")
                         result = None
 
                     frags = result.get("fragments") if result else None
                     if frags is not None and not frags.empty:
                         f = frags.copy()
-                        f.insert(0, "source_file", uploaded.name)
+                        f.insert(0, "source_file", name)
                         frag_frames.append(f)
                         summ = {
-                            "source_file":   uploaded.name,
+                            "source_file":   name,
                             "n_fragments":   int(len(frags)),
                             "curv_mean":     float(frags["curv_mean"].mean()),
                             "curv_median":   float(frags["curv_mean"].median()),
@@ -519,7 +589,7 @@ with tab_curv:
                                     summ[k] = ir[k]
                         summ_rows.append(summ)
                     else:
-                        failed.append(uploaded.name)
+                        failed.append(name)
                 progress.progress(1.0, text="Done.")
 
             if failed:
@@ -538,7 +608,7 @@ with tab_curv:
                 st.session_state["curvature_summary"] = pd.DataFrame(summ_rows)
                 n_frag = int(sum(len(f) for f in frag_frames))
                 st.success(f"Measured {n_frag} fragment(s) across "
-                           f"{len(summ_rows)} / {len(curv_uploads)} image(s).")
+                           f"{len(summ_rows)} / {len(curv_inputs)} image(s).")
 
     frag_df = st.session_state.get("curvature_fragments")
     summ_df = st.session_state.get("curvature_summary")
@@ -619,7 +689,47 @@ with tab_curv:
 
 
 # ============================================================
-# TAB 3 — Run Remote (HPC)
+# TAB 3 — Run Local (same GUI, on your own machine)
+# ============================================================
+with tab_local:
+    st.header("Run Local — the same GUI on your own computer")
+    st.markdown(
+        "**Why:** this hosted app runs on a shared server, so it can't reach files "
+        "on your computer and it caps uploads (500 MB here). Large scans — like a "
+        "2 GB curvature image — won't upload.\n\n"
+        "**Fix:** fibermorph is an ordinary Python package, and this whole interface "
+        "ships with it. Install it once and launch the *same* app on your own "
+        "machine — Streamlit runs perfectly well locally — where there's no upload "
+        "limit and you can point it straight at a folder of images:\n\n"
+        "```bash\n"
+        "pip install 'fibermorph[gui]'\n"
+        "fibermorph-gui\n"
+        "```\n\n"
+        "That opens the identical interface in your browser at "
+        "`http://localhost:8501`, but running on your computer. On the "
+        "**Cross-Section** and **Curvature** tabs you then get an extra "
+        "**“Folder on disk”** option — choose it, paste the path to your images, and "
+        "they are read directly from disk (no upload, any size)."
+    )
+    if _LOCAL:
+        st.success(
+            "✅ You're running locally right now — the **Folder on disk** option is "
+            "available on the Cross-Section and Curvature tabs, and uploads are "
+            "raised to 5 GB."
+        )
+    else:
+        st.info(
+            "You're on the hosted app (upload-only, 500 MB). Follow the steps above "
+            "to run locally for large images."
+        )
+    st.caption(
+        "No GPU or cluster needed — this runs on an ordinary laptop or desktop. For "
+        "a whole study on a shared HPC cluster, see the **Run Remote** tab."
+    )
+
+
+# ============================================================
+# TAB 4 — Run Remote (HPC)
 # ============================================================
 with tab_hpc:
     st.header("Run Remote on your own cluster")
