@@ -322,6 +322,9 @@ def _faceted_histograms(df, group_col, metrics, suptitle):
     """One row of histograms per group (e.g. per source image), one column per
     metric — so each sample's distribution is on its own panelled row.
 
+    Each metric column shares one x-axis (and common bin edges) across all
+    sample rows, so the distributions line up for at-a-glance comparison.
+
     Returns a matplotlib Figure, or None if nothing is plottable.
     """
     import matplotlib.pyplot as plt
@@ -332,16 +335,24 @@ def _faceted_histograms(df, group_col, metrics, suptitle):
     if not groups or not cols:
         return None
 
+    # Common bin edges per metric (from all samples pooled) so the bars align
+    # and every row shares the same x-scale.
+    col_bins = []
+    for col, _ in cols:
+        allvals = df[col].replace([np.inf, -np.inf], np.nan).dropna()
+        col_bins.append(np.histogram_bin_edges(allvals, bins="auto")
+                        if len(allvals) >= 1 else "auto")
+
     nrows, ncols = len(groups), len(cols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 2.6 * nrows),
-                             squeeze=False)
+                             squeeze=False, sharex="col")
     for r, g in enumerate(groups):
         sub = df[df[group_col] == g]
         for c, (col, label) in enumerate(cols):
             ax = axes[r][c]
             vals = sub[col].replace([np.inf, -np.inf], np.nan).dropna()
             if len(vals) >= 1:
-                ax.hist(vals, bins="auto", color="#4C72B0", edgecolor="white")
+                ax.hist(vals, bins=col_bins[c], color="#4C72B0", edgecolor="white")
             if r == 0:
                 ax.set_title(label, fontsize=10)
             if c == 0:
