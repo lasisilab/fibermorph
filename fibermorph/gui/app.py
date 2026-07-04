@@ -34,6 +34,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from fibermorph.utils.units import resolution_to_px_per_unit
+
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call
 # ---------------------------------------------------------------------------
@@ -256,15 +258,18 @@ with tab_sec:
     )
 
     with st.expander("Settings", expanded=False):
-        c1, c2, c3 = st.columns(3)
-        sec_res_mu = c1.number_input(
-            "Resolution (px/µm)", value=4.25, step=0.01, min_value=0.0001, key="sec_res_mu",
-            help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
-                 "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
-        sec_min_d  = c2.number_input("Min diameter (µm)", value=30.0,  step=1.0, key="sec_min_d")
-        sec_max_d  = c3.number_input("Max diameter (µm)", value=150.0, step=1.0, key="sec_max_d")
-        sec_sam2   = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
-        sec_ckpt   = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
+        c1, c2, c3, c4 = st.columns(4)
+        sec_res_val  = c1.number_input(
+            "Resolution", value=4.25, step=0.01, min_value=0.0001, key="sec_res_val",
+            help="Enter your microscope scale in whichever unit you have; pick the "
+                 "matching unit on the right and it is converted for you.")
+        sec_res_unit = c2.selectbox("Unit", ["px/µm", "µm/px"], key="sec_res_unit")
+        sec_min_d    = c3.number_input("Min diameter (µm)", value=30.0,  step=1.0, key="sec_min_d")
+        sec_max_d    = c4.number_input("Max diameter (µm)", value=150.0, step=1.0, key="sec_max_d")
+        sec_res_mu   = resolution_to_px_per_unit(sec_res_val, sec_res_unit)
+        st.caption(f"Working resolution: **{sec_res_mu:.4g} px/µm**")
+        sec_sam2     = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
+        sec_ckpt     = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
 
     if st.button("▶ Analyse cross-sections", type="primary", key="sec_run"):
         if not sec_uploads:
@@ -424,10 +429,16 @@ with tab_curv:
     )
 
     with st.expander("Settings", expanded=False):
-        c1, c2, c3 = st.columns(3)
-        curv_res_mm = c1.number_input("Resolution (px/mm)", value=132.0, step=1.0, min_value=0.01, key="curv_res_mm")
-        curv_window = c2.number_input("Taubin window (px)", value=50,    step=5,   key="curv_window")
-        curv_clahe  = c3.toggle("CLAHE preprocessing",      value=False,           key="curv_clahe")
+        c1, c2, c3, c4 = st.columns(4)
+        curv_res_val  = c1.number_input(
+            "Resolution", value=132.0, step=1.0, min_value=0.0001, key="curv_res_val",
+            help="Enter your scale in whichever unit you have; pick the matching "
+                 "unit on the right and it is converted for you.")
+        curv_res_unit = c2.selectbox("Unit", ["px/mm", "mm/px"], key="curv_res_unit")
+        curv_window   = c3.number_input("Taubin window (px)", value=50, step=5, key="curv_window")
+        curv_clahe    = c4.toggle("CLAHE preprocessing", value=False, key="curv_clahe")
+        curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
+        st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
 
     if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
         if not curv_uploads:
@@ -556,13 +567,15 @@ with tab_upload:
     st.header("Settings")
 
     with st.expander("Cross-section settings", expanded=False):
-        col1, col2, col3 = st.columns(3)
-        resolution_mu   = col1.number_input(
-            "Section resolution (px/µm)", value=4.25, step=0.01,
-            help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
-                 "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
-        min_diam        = col2.number_input("Min diameter (µm)",          value=30.0,  step=1.0)
-        max_diam        = col3.number_input("Max diameter (µm)",          value=150.0, step=1.0)
+        col1, col2, col3, col4 = st.columns(4)
+        sec_res_val_b  = col1.number_input(
+            "Section resolution", value=4.25, step=0.01, min_value=0.0001,
+            key="batch_sec_res_val")
+        sec_res_unit_b = col2.selectbox("Unit", ["px/µm", "µm/px"], key="batch_sec_res_unit")
+        min_diam       = col3.number_input("Min diameter (µm)", value=30.0,  step=1.0)
+        max_diam       = col4.number_input("Max diameter (µm)", value=150.0, step=1.0)
+        resolution_mu  = resolution_to_px_per_unit(sec_res_val_b, sec_res_unit_b)
+        st.caption(f"Script will pass **--resolution_mu {resolution_mu:.4g}** (px/µm).")
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
         sam2_checkpoint = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT)
         ext_features    = st.toggle(
@@ -570,10 +583,15 @@ with tab_upload:
         )
 
     with st.expander("Curvature settings", expanded=False):
-        col4, col5, col6 = st.columns(3)
-        resolution_mm = col4.number_input("Curvature resolution (px/mm)", value=132.0, step=1.0)
-        window_size   = col5.number_input("Taubin window (px)",           value=50,    step=5)
-        use_clahe     = col6.toggle("CLAHE preprocessing", value=False)
+        col5, col6, col7, col8 = st.columns(4)
+        curv_res_val_b  = col5.number_input(
+            "Curvature resolution", value=132.0, step=1.0, min_value=0.0001,
+            key="batch_curv_res_val")
+        curv_res_unit_b = col6.selectbox("Unit", ["px/mm", "mm/px"], key="batch_curv_res_unit")
+        window_size     = col7.number_input("Taubin window (px)", value=50, step=5)
+        use_clahe       = col8.toggle("CLAHE preprocessing", value=False)
+        resolution_mm   = resolution_to_px_per_unit(curv_res_val_b, curv_res_unit_b)
+        st.caption(f"Script will pass **--resolution_mm {resolution_mm:.4g}** (px/mm).")
         ext_curvature = st.toggle(
             "Extended curvature metrics (curl index, wave count, diameter stats)", value=True
         )
@@ -602,7 +620,7 @@ with tab_upload:
                     "fibermorph --section",
                     f"    -i '{section_path}'",
                     f"    -o '{output_dir_batch}'",
-                    f"    --resolution_mu {resolution_mu}",
+                    f"    --resolution_mu {resolution_mu:g}",
                     f"    --minsize {int(min_diam)}",
                     f"    --maxsize {int(max_diam)}",
                     f"    --jobs {int(slurm_cpus)}",
@@ -621,7 +639,7 @@ with tab_upload:
                     "fibermorph --curvature",
                     f"    -i '{curv_path}'",
                     f"    -o '{output_dir_batch}'",
-                    f"    --resolution_mm {int(resolution_mm)}",
+                    f"    --resolution_mm {resolution_mm:g}",
                     f"    --window_size {int(window_size)}",
                     f"    --jobs {int(slurm_cpus)}",
                 ]

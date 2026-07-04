@@ -286,7 +286,7 @@ def batch(
     curvature_directory : directory of curvature images, or None to skip
     main_output_path    : parent directory for output
     jobs                : parallel jobs
-    resolution_mu       : section resolution in µm/pixel
+    resolution_mu       : section resolution in pixels/µm
     resolution_mm       : curvature resolution in pixels/mm
     minsize / maxsize   : diameter filter in µm (section only)
     window_size         : Taubin sliding window size in pixels

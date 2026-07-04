@@ -64,10 +64,20 @@ def parse_args():
 
     gr_curv.add_argument(
         "--resolution_mm",
-        type=int,
+        type=float,
         metavar="",
-        default=132,
-        help="Integer. Number of pixels per mm for curvature analysis. Default is 132.",
+        default=132.0,
+        help="Float. Curvature scale, interpreted per --resolution_mm_units. "
+        "Default is 132 (pixels per mm).",
+    )
+
+    gr_curv.add_argument(
+        "--resolution_mm_units",
+        type=str,
+        default="px_per_mm",
+        choices=["px_per_mm", "mm_per_px"],
+        help="Units for --resolution_mm: 'px_per_mm' (default, pixels per mm) or "
+        "'mm_per_px' (mm per pixel). Converted to pixels/mm internally.",
     )
 
     gr_curv.add_argument(
@@ -125,7 +135,18 @@ def parse_args():
         type=float,
         metavar="",
         default=4.25,
-        help="Float. Number of pixels per micron for section analysis. Default is 4.25.",
+        help="Float. Section scale, interpreted per --resolution_mu_units. "
+        "Default is 4.25 (pixels per micron).",
+    )
+
+    gr_sect.add_argument(
+        "--resolution_mu_units",
+        type=str,
+        default="px_per_um",
+        choices=["px_per_um", "um_per_px"],
+        help="Units for --resolution_mu: 'px_per_um' (default, pixels per micron) "
+        "or 'um_per_px' (microns per pixel, e.g. a 0.18 scale). Converted to "
+        "pixels/µm internally.",
     )
 
     gr_sect.add_argument(
@@ -258,10 +279,16 @@ def parse_args():
 def main():
     """Main entry point for fibermorph CLI."""
     from .utils.filesystem import make_subdirectory
+    from .utils.units import resolution_to_px_per_unit
     from .workflows import raw2gray, curvature, section, batch
     from . import demo
-    
+
     args = parse_args()
+
+    # Normalise resolutions to the pixels-per-unit the pipeline expects,
+    # honouring the reciprocal (µm/px, mm/px) units if the user chose them.
+    resolution_mu = resolution_to_px_per_unit(args.resolution_mu, args.resolution_mu_units)
+    resolution_mm = resolution_to_px_per_unit(args.resolution_mm, args.resolution_mm_units)
 
     if args.demo_real_curv is True:
         demo.real_curv(args.output_directory)
@@ -280,7 +307,7 @@ def main():
             args.input_directory,
             output_dir,
             args.jobs,
-            args.resolution_mm,
+            resolution_mm,
             args.window_size,
             args.window_unit,
             args.save_image,
@@ -293,7 +320,7 @@ def main():
             args.input_directory,
             output_dir,
             args.jobs,
-            args.resolution_mu,
+            resolution_mu,
             args.minsize,
             args.maxsize,
             args.save_image,
