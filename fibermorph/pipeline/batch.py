@@ -84,7 +84,7 @@ def run_batch(
     section_dir         : directory of cross-section images, or None to skip
     curv_dir            : directory of curvature images, or None to skip
     output_dir          : directory where CSVs are written
-    resolution_mu       : cross-section resolution in µm/pixel
+    resolution_mu       : cross-section resolution in pixels per µm
     resolution_mm       : curvature resolution in pixels/mm
     min_diam / max_diam : diameter filter in µm (section only)
     window_size         : Taubin sliding window in pixels

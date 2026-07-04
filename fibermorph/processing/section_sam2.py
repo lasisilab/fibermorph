@@ -139,9 +139,13 @@ def _watershed_segment(
     max_px = max_diam * resolution_mu
 
     candidates = []
+    n_regions = 0
+    n_size_rejected = 0
     for region in regionprops(labels):
+        n_regions += 1
         maj = region.major_axis_length
         if not (min_px <= maj <= max_px):
+            n_size_rejected += 1
             continue
         circ  = min(4 * np.pi * region.area / (region.perimeter ** 2 + 1e-10), 1.0) \
                 if region.perimeter > 0 else 0.0
@@ -156,6 +160,15 @@ def _watershed_segment(
         })
 
     if not candidates:
+        if n_size_rejected:
+            logger.warning(
+                "No cross-section passed the size filter "
+                f"[{min_diam:.0f}, {max_diam:.0f}] µm = [{min_px:.0f}, {max_px:.0f}] px "
+                f"at resolution_mu={resolution_mu} px/µm "
+                f"({n_size_rejected}/{n_regions} candidate region(s) fell outside it). "
+                "If a cross-section is clearly present, check that resolution_mu is in "
+                "PIXELS PER µm (e.g. 5.556 for 0.18 µm/pixel) and the min/max diameter range."
+            )
         return None
 
     max_dist  = max(c["dist"]      for c in candidates)

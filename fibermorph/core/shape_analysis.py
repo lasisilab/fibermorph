@@ -98,7 +98,7 @@ def compute_radial_profile(
     binary_img    : 2D uint8 array (values 0 or 255)
     props         : skimage regionprops object
     n_angles      : number of rays
-    resolution_mu : µm per pixel
+    resolution_mu : pixels per µm
 
     Returns
     -------

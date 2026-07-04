@@ -208,7 +208,10 @@ with tab_quick:
 
     with st.expander("Settings", expanded=False):
         c1, c2, c3 = st.columns(3)
-        qt_res_mu = c1.number_input("Section resolution (µm/px)",   value=4.25,  step=0.01, key="qt_res_mu")
+        qt_res_mu = c1.number_input(
+            "Section resolution (px/µm)", value=4.25, step=0.01, key="qt_res_mu",
+            help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
+                 "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
         qt_min_d  = c2.number_input("Min diameter (µm)",            value=30.0,  step=1.0,  key="qt_min_d")
         qt_max_d  = c3.number_input("Max diameter (µm)",            value=150.0, step=1.0,  key="qt_max_d")
         qt_res_mm = c1.number_input("Curvature resolution (px/mm)", value=132.0, step=1.0,  key="qt_res_mm")
@@ -223,10 +226,11 @@ with tab_quick:
         else:
             from fibermorph.utils.metadata import parse_metadata
 
-            rows      = []
-            seg_store = {}
-            total     = len(sec_uploads) + len(curv_uploads)
-            progress  = st.progress(0, text="Processing…")
+            rows            = []
+            seg_store       = {}
+            failed_sections = []
+            total           = len(sec_uploads) + len(curv_uploads)
+            progress        = st.progress(0, text="Processing…")
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 all_items = (
@@ -272,8 +276,20 @@ with tab_quick:
                         if isinstance(result, dict):
                             row.update(result)
                         rows.append(row)
+                    elif img_type == "section":
+                        failed_sections.append(uploaded.name)
 
                 progress.progress(1.0, text="Done.")
+
+            if failed_sections:
+                st.warning(
+                    "No cross-section was detected in: "
+                    + ", ".join(failed_sections)
+                    + ".  If a cross-section is clearly present, the most common cause is the "
+                    "**Section resolution** — it must be in **pixels per µm** (e.g. enter "
+                    "**5.556** for a 0.18 µm/pixel scale), not µm/pixel. Also check the "
+                    "min/max diameter range."
+                )
 
             if not rows:
                 st.error("No images were processed successfully.")
@@ -458,7 +474,10 @@ with tab_upload:
 
     with st.expander("Cross-section settings", expanded=False):
         col1, col2, col3 = st.columns(3)
-        resolution_mu   = col1.number_input("Section resolution (µm/px)", value=4.25,  step=0.01)
+        resolution_mu   = col1.number_input(
+            "Section resolution (px/µm)", value=4.25, step=0.01,
+            help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
+                 "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
         min_diam        = col2.number_input("Min diameter (µm)",          value=30.0,  step=1.0)
         max_diam        = col3.number_input("Max diameter (µm)",          value=150.0, step=1.0)
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
