@@ -9,7 +9,7 @@ Three tabs:
   Curvature        — upload curvature images and measure them in-process;
                      results appear inline.
 
-  Run at scale     — documentation + an SBATCH script scaffold for running the
+  Run Remote     — documentation + an SBATCH script scaffold for running the
                      fibermorph CLI on your own workstation or HPC cluster. It
                      generates a script to download and submit yourself; it does
                      not submit anything or connect to any cluster.
@@ -44,7 +44,7 @@ st.title("🔬 fibermorph — Fiber Cross-Section & Curvature Analysis")
 st.caption(
     "Cross-section shape analysis (SAM2 / watershed) + curvature analysis. "
     "Use the **Cross-Section** and **Curvature** tabs to analyse uploaded images, "
-    "or **Run at scale** to build an SBATCH script for the fibermorph CLI."
+    "or **Run Remote** to build an SBATCH script for the fibermorph CLI."
 )
 
 # ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@ def _metric_histograms(df, metrics, suptitle):
 # Tabs
 # ---------------------------------------------------------------------------
 tab_sec, tab_curv, tab_hpc = st.tabs(
-    ["🔬 Cross-Section", "🌀 Curvature", "🖥️ Run at scale"]
+    ["🔬 Cross-Section", "🌀 Curvature", "🖥️ Run Remote"]
 )
 
 _FILENAME_NOTE = (
@@ -240,7 +240,7 @@ with tab_sec:
     st.info(
         "Upload cross-section images to segment and measure them immediately on "
         "this server. For a whole study or very large images, use the "
-        "**Run at scale** tab."
+        "**Run Remote** tab."
     )
     st.caption(_FILENAME_NOTE)
 
@@ -411,7 +411,7 @@ with tab_curv:
     st.header("Curvature Analysis")
     st.info(
         "Upload curvature images to measure them immediately on this server. "
-        "For a whole study or very large images, use the **Run at scale** tab."
+        "For a whole study or very large images, use the **Run Remote** tab."
     )
     st.caption(_FILENAME_NOTE)
 
@@ -427,8 +427,17 @@ with tab_curv:
             help="Enter your scale in whichever unit you have; pick the matching "
                  "unit on the right and it is converted for you.")
         curv_res_unit = c2.selectbox("Unit", ["px/mm", "mm/px"], key="curv_res_unit")
-        curv_window   = c3.number_input("Taubin window (px)", value=50, step=5, key="curv_window")
-        curv_clahe    = c4.toggle("CLAHE preprocessing", value=False, key="curv_clahe")
+        curv_window   = c3.number_input(
+            "Taubin window (px)", value=50, step=5, key="curv_window",
+            help="Length (in pixels) of the sliding window used to fit a circle "
+                 "to the fiber (Taubin method) and measure local curvature at each "
+                 "step along it. Larger = smoother, more global curvature; smaller "
+                 "= more local detail. Keep it well below your fragment length.")
+        curv_clahe    = c4.toggle(
+            "CLAHE preprocessing", value=False, key="curv_clahe",
+            help="Contrast-Limited Adaptive Histogram Equalization: boosts local "
+                 "contrast before fibers are detected. Helps when illumination is "
+                 "uneven across the image; may add noise on already-clean images.")
         curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
 
@@ -518,10 +527,10 @@ with tab_curv:
 
 
 # ============================================================
-# TAB 3 — Run at scale (HPC)
+# TAB 3 — Run Remote (HPC)
 # ============================================================
 with tab_hpc:
-    st.header("Run at scale on your own cluster")
+    st.header("Run Remote on your own cluster")
     st.markdown(
         "The tabs above analyse a few uploaded images right here in the browser. "
         "For a whole study — or images too large to upload — run the **fibermorph "
@@ -588,8 +597,17 @@ with tab_hpc:
             "Curvature resolution", value=132.0, step=1.0, min_value=0.0001,
             key="batch_curv_res_val")
         curv_res_unit_b = col6.selectbox("Unit", ["px/mm", "mm/px"], key="batch_curv_res_unit")
-        window_size     = col7.number_input("Taubin window (px)", value=50, step=5)
-        use_clahe       = col8.toggle("CLAHE preprocessing", value=False)
+        window_size     = col7.number_input(
+            "Taubin window (px)", value=50, step=5,
+            help="Length (in pixels) of the sliding window used to fit a circle "
+                 "to the fiber (Taubin method) and measure local curvature. Larger "
+                 "= smoother/more global; smaller = more local detail. Keep it well "
+                 "below your fragment length.")
+        use_clahe       = col8.toggle(
+            "CLAHE preprocessing", value=False,
+            help="Contrast-Limited Adaptive Histogram Equalization: boosts local "
+                 "contrast before fibers are detected. Helps with uneven "
+                 "illumination; may add noise on already-clean images.")
         resolution_mm   = resolution_to_px_per_unit(curv_res_val_b, curv_res_unit_b)
         st.caption(f"Script will pass **--resolution_mm {resolution_mm:.4g}** (px/mm).")
         ext_curvature = st.toggle(
