@@ -35,27 +35,26 @@ import pandas as pd
 import streamlit as st
 
 from fibermorph.utils.units import resolution_to_px_per_unit
+from fibermorph.gui import styles
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="fibermorph",
+    page_title="fibermorph — Lasisi Lab",
     page_icon="🔬",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("🔬 fibermorph — Fiber Cross-Section & Curvature Analysis")
-st.caption(
-    "Cross-section shape analysis (SAM2 / watershed) + curvature analysis. "
-    "Use **Cross-Section** and **Curvature** to analyse images; **Run Local** to "
-    "process large images on your own machine; **Run Remote** for a cluster job."
-)
+# Lasisi Lab design system — fonts, sidebar, cards, table, buttons.
+st.markdown(styles.css(), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Session state defaults
 # ---------------------------------------------------------------------------
 for _key, _default in [
+    ("active_view",         "section"),
     ("sbatch_script",       ""),
     ("section_results",     None),
     ("curvature_fragments", None),
@@ -309,10 +308,14 @@ def _metric_histograms(df, metrics, suptitle):
     fig, axes = plt.subplots(1, len(series), figsize=(5 * len(series), 4))
     if len(series) == 1:
         axes = [axes]
-    for ax, (label, vals) in zip(axes, series):
-        ax.hist(vals, bins="auto", color="#4C72B0", edgecolor="white")
+    for i, (ax, (label, vals)) in enumerate(zip(axes, series)):
+        ax.hist(vals, bins="auto",
+                color=styles.CHART_COLORS[i % len(styles.CHART_COLORS)],
+                edgecolor="white")
         ax.set_xlabel(label)
         ax.set_ylabel("Count")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
     fig.suptitle(suptitle, fontsize=12, fontweight="bold")
     fig.tight_layout()
     return fig
@@ -352,7 +355,11 @@ def _faceted_histograms(df, group_col, metrics, suptitle):
             ax = axes[r][c]
             vals = sub[col].replace([np.inf, -np.inf], np.nan).dropna()
             if len(vals) >= 1:
-                ax.hist(vals, bins=col_bins[c], color="#4C72B0", edgecolor="white")
+                ax.hist(vals, bins=col_bins[c],
+                        color=styles.CHART_COLORS[c % len(styles.CHART_COLORS)],
+                        edgecolor="white")
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
             if r == 0:
                 ax.set_title(label, fontsize=10)
             if c == 0:
@@ -365,12 +372,8 @@ def _faceted_histograms(df, group_col, metrics, suptitle):
 
 
 # ---------------------------------------------------------------------------
-# Tabs
+# Constants
 # ---------------------------------------------------------------------------
-tab_sec, tab_curv, tab_local, tab_hpc = st.tabs(
-    ["🔬 Cross-Section", "🌀 Curvature", "💻 Run Local", "🖥️ Run Remote"]
-)
-
 _FILENAME_NOTE = (
     "Each result row records its **source filename**. The app analyses one image "
     "at a time and does no grouping — name your files however you'll want to group "
@@ -378,12 +381,42 @@ _FILENAME_NOTE = (
 )
 _UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 
+# ---------------------------------------------------------------------------
+# Sidebar: brand + navigation + status (replaces the top tab bar)
+# ---------------------------------------------------------------------------
+_NAV_GROUPS = [
+    ("Analyse", [("section", "🔬  Cross-Section"), ("curvature", "🌀  Curvature")]),
+    ("Run",     [("local", "💻  Run Local"), ("remote", "🖥️  Run Remote")]),
+]
+
+with st.sidebar:
+    st.markdown(styles.brand_html(), unsafe_allow_html=True)
+    for _eyebrow, _items in _NAV_GROUPS:
+        st.markdown(f'<div class="nav-eyebrow">{_eyebrow}</div>', unsafe_allow_html=True)
+        for _key, _label in _items:
+            _active = st.session_state.active_view == _key
+            if st.button(_label, key=f"nav_{_key}", use_container_width=True,
+                         type="primary" if _active else "secondary"):
+                st.session_state.active_view = _key
+                st.rerun()
+    _status = ("Local · 5 GB cap · folder input" if _LOCAL
+               else "Hosted · 500 MB upload cap")
+    st.markdown(styles.footer_html(_status, "v2.0 · SAM2 + watershed"),
+                unsafe_allow_html=True)
+
+_view = st.session_state.active_view
+
 
 # ============================================================
 # TAB 1 — Cross-Section (file upload + in-process run)
 # ============================================================
-with tab_sec:
-    st.header("Cross-Section Analysis")
+if _view == "section":
+    st.markdown(styles.view_header(
+        "Cross-Section",
+        "Segment & measure cross-sections",
+        "Upload cross-section images; segment them (SAM2 / watershed) and measure "
+        "shape per image.",
+    ), unsafe_allow_html=True)
     st.info(
         "Segment and measure cross-section images here. For images too large to "
         "upload, run this app locally (see **Run Local**); for a whole study on a "
@@ -472,8 +505,22 @@ with tab_sec:
     if sec_df is not None and not sec_df.empty:
         import matplotlib.pyplot as plt
 
-        st.divider()
-        st.metric("Cross-sections measured", len(sec_df))
+        st.markdown('<hr class="fm-rule">', unsafe_allow_html=True)
+        _cards = [{"label": "Measured", "value": len(sec_df), "hero": True}]
+        if "area_mu2" in sec_df.columns:
+            _cards.append({"label": "Mean area",
+                           "value": f"{sec_df['area_mu2'].mean():,.0f}", "unit": "µm²"})
+        if "eccentricity" in sec_df.columns:
+            _cards.append({"label": "Mean eccentricity",
+                           "value": f"{sec_df['eccentricity'].mean():.3f}"})
+        if "segmentation_method" in sec_df.columns:
+            _pills = []
+            for _m, _n in sec_df["segmentation_method"].value_counts().items():
+                _sam = str(_m).lower().startswith("sam")
+                _pills.append((f"{'SAM2' if _sam else str(_m).title()} · {_n}",
+                               "teal" if _sam else "indigo"))
+            _cards.append({"label": "Segmentation", "pills": _pills})
+        st.markdown(styles.metric_cards(_cards), unsafe_allow_html=True)
 
         sec_cols = {
             "source_file":         "File",
@@ -549,8 +596,13 @@ with tab_sec:
 # ============================================================
 # TAB 2 — Curvature
 # ============================================================
-with tab_curv:
-    st.header("Curvature Analysis")
+elif _view == "curvature":
+    st.markdown(styles.view_header(
+        "Curvature",
+        "Measure the shape of each fiber",
+        "Per-fragment length and curvature by the Taubin circle-fit, aggregated "
+        "per image.",
+    ), unsafe_allow_html=True)
     st.info(
         "Measure curvature images here. For images too large to upload, run this "
         "app locally (see **Run Local**); for a whole study on a cluster, see "
@@ -660,10 +712,18 @@ with tab_curv:
     if frag_df is not None and not frag_df.empty:
         import matplotlib.pyplot as plt
 
-        st.divider()
-        m1, m2 = st.columns(2)
-        m1.metric("Fragments measured", len(frag_df))
-        m2.metric("Images", frag_df["source_file"].nunique())
+        st.markdown('<hr class="fm-rule">', unsafe_allow_html=True)
+        _cards = [
+            {"label": "Fragments", "value": len(frag_df), "hero": True},
+            {"label": "Images", "value": int(frag_df["source_file"].nunique())},
+        ]
+        if "length" in frag_df.columns:
+            _cards.append({"label": "Mean length",
+                           "value": f"{frag_df['length'].mean():.1f}", "unit": "mm"})
+        if "curv_mean" in frag_df.columns:
+            _cards.append({"label": "Mean curvature",
+                           "value": f"{frag_df['curv_mean'].mean():.3f}", "unit": "mm⁻¹"})
+        st.markdown(styles.metric_cards(_cards), unsafe_allow_html=True)
 
         # --- Per-fragment table (primary output) ---
         st.markdown("**Per-fragment measurements** — one row per fiber fragment")
@@ -746,8 +806,13 @@ with tab_curv:
 # ============================================================
 # TAB 3 — Run Local (same GUI, on your own machine)
 # ============================================================
-with tab_local:
-    st.header("Run Local — the same GUI on your own computer")
+elif _view == "local":
+    st.markdown(styles.view_header(
+        "Run Local",
+        "The same app, on your own machine",
+        "Run this identical interface locally for images too large to upload — no "
+        "size cap, and you can read straight from a folder on disk.",
+    ), unsafe_allow_html=True)
     st.markdown(
         "**Why:** this hosted app runs on a shared server, so it can't reach files "
         "on your computer and it caps uploads (500 MB here). Large scans — like a "
@@ -786,10 +851,16 @@ with tab_local:
 # ============================================================
 # TAB 4 — Run Remote (HPC)
 # ============================================================
-with tab_hpc:
-    st.header("Run Remote on your own cluster")
+elif _view == "remote":
+    st.markdown(styles.view_header(
+        "Run Remote",
+        "Build an SBATCH script for your cluster",
+        "Generate a ready-to-edit SBATCH script that runs the fibermorph CLI on an "
+        "HPC cluster. It builds the script only — it does not submit anything.",
+    ), unsafe_allow_html=True)
     st.markdown(
-        "The tabs above analyse a few uploaded images right here in the browser. "
+        "The **Cross-Section** and **Curvature** views analyse a few uploaded images "
+        "right here in the browser. "
         "For a whole study — or images too large to upload — run the **fibermorph "
         "command-line tool** where your images already live (your workstation or an "
         "HPC cluster):\n\n"
