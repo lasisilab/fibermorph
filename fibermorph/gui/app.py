@@ -958,7 +958,7 @@ elif _view == "remote":
 
     st.divider()
     st.subheader("3 · Generate script")
-    if st.button("▶ Generate SBATCH script", type="primary"):
+    if st.button("Generate SBATCH script", type="primary", key="gen_sbatch"):
         if not section_path and not curv_path:
             st.error("Provide at least one image directory.")
         elif not output_dir_batch:

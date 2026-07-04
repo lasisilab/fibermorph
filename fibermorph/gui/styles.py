@@ -66,6 +66,20 @@ _NAV_ICONS = {
                '<path d="M7.5 7.5h.01M7.5 16.5h.01"/></svg>'),
 }
 
+# Nav sub-labels (lighter second line under each item).
+_NAV_SUBS = {
+    "section": "Segment & measure",
+    "curvature": "Count & measure",
+    "local": "On your machine",
+    "remote": "On a cluster",
+}
+
+# Magic-wand-with-sparkles glyph for the Generate SBATCH button.
+_WAND_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+             'stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+             '<path d="M5 19 L15 9"/><path d="M17 3v4M15 5h4"/>'
+             '<path d="M6 5v2M5 6h2"/><path d="M20 11v2M19 12h2"/></svg>')
+
 
 def _svg_uri(svg: str) -> str:
     """Base64 data URI for an inline SVG (avoids URL-escaping issues in CSS)."""
@@ -81,6 +95,11 @@ def css() -> str:
         f"-webkit-mask-image:url('{_svg_uri(svg)}'); mask-image:url('{_svg_uri(svg)}'); }}"
         for k, svg in _NAV_ICONS.items()
     )
+    nav_subs = "\n".join(
+        f'[data-testid="stSidebar"] .st-key-nav_{k} button p::after {{ content:"{sub}"; }}'
+        for k, sub in _NAV_SUBS.items()
+    )
+    wand = _svg_uri(_WAND_SVG)
     return f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600&family=Mulish:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600&display=swap');
@@ -150,6 +169,14 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
 }}
 [data-testid="stSidebar"] .stButton > button[kind="primary"]::before {{ background-color:{TEAL_400}; }}
 {nav_icons}
+/* Nav sub-labels: lighter second line under each item label. */
+[data-testid="stSidebar"] .stButton > button {{ align-items:center; }}
+[data-testid="stSidebar"] .stButton > button p {{ line-height:1.15; }}
+[data-testid="stSidebar"] .stButton > button p::after {{
+  display:block; font-family:'Plus Jakarta Sans', sans-serif; font-size:11px;
+  font-weight:500; opacity:0.58; margin-top:2px; letter-spacing:0.01em;
+}}
+{nav_subs}
 [data-testid="stSidebar"] .nav-eyebrow {{
   font-family:'Plus Jakarta Sans', sans-serif; font-size:10.5px; font-weight:600;
   letter-spacing:0.2em; text-transform:uppercase; color:rgba(255,255,255,0.45);
@@ -206,6 +233,14 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
   font-family:'Plus Jakarta Sans', sans-serif; font-weight:600;
 }}
 [data-testid="stMain"] .stDownloadButton > button:hover {{ background:#CDE7E4; color:{TEAL_700}; }}
+/* Generate SBATCH = pink accent CTA with a magic-wand glyph. */
+[data-testid="stMain"] .st-key-gen_sbatch button[kind="primary"] {{ background:{PINK_600}; color:#fff; }}
+[data-testid="stMain"] .st-key-gen_sbatch button[kind="primary"]:hover {{ background:{PINK_800}; color:#fff; }}
+[data-testid="stMain"] .st-key-gen_sbatch button[kind="primary"]::before {{
+  content:""; display:inline-block; width:15px; height:15px; margin-right:9px; flex:none;
+  vertical-align:middle; background-color:#fff;
+  -webkit-mask:url('{wand}') no-repeat center/contain; mask:url('{wand}') no-repeat center/contain;
+}}
 
 /* ---- Expander (Settings) as a card ---- */
 [data-testid="stExpander"] {{ border:1px solid #E4E7EC; border-radius:14px; background:#fff; box-shadow:0 1px 2px rgba(31,35,44,0.05); }}
