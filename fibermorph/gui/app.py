@@ -1,21 +1,20 @@
 """
-fibermorph/gui/app.py — Hair Analysis Streamlit Interface
-=========================================================
+fibermorph/gui/app.py — fibermorph Streamlit interface
+======================================================
 Five tabs:
 
-  Quick Test          — upload images, run analysis immediately in-process.
-                        No SBATCH needed; ideal for testing a few images.
+  Cross-Section       — upload cross-section images, segment and measure them
+                        in-process; review input/mask/overlay inline.
 
-  Segmentation        — review input/mask/overlay for cross-section images
-                        processed in Quick Test.
+  Curvature           — upload curvature images and measure them in-process.
 
   Batch (Cluster)     — point to existing cluster directories, configure
                         settings, and generate an SBATCH script.
 
   Submit & Monitor    — submit the SBATCH script and watch job status.
 
-  Results             — load per-image / per-sample CSVs and explore
-                        18 publication-ready figures.
+  Results             — load the per-image CSV and explore per-image
+                        measurements and simple distributions.
 
 Start via:
   fibermorph-gui
@@ -47,7 +46,8 @@ st.set_page_config(
 st.title("🔬 fibermorph — Hair Analysis Pipeline")
 st.caption(
     "Cross-section shape analysis (SAM2 / watershed) + curvature analysis. "
-    "Use **Quick Test** for a few uploaded images, or **Batch** to submit a cluster job."
+    "Use the **Cross-Section** and **Curvature** tabs for a few uploaded images, "
+    "or **Batch (Cluster)** to submit a cluster job."
 )
 
 # ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ _DEFAULT_CHECKPOINT = _resolve_checkpoint()
 
 
 # ---------------------------------------------------------------------------
-# In-process helpers for Quick Test tab
+# In-process helpers for the Cross-Section and Curvature tabs
 # ---------------------------------------------------------------------------
 
 def _process_section_gui(
@@ -121,6 +121,9 @@ def _process_section_gui(
     # measurements are preserved (<0.5%) while processing is much lighter.
     gray, resolution_mu = downsample_to_resolution(gray, resolution_mu)
 
+    # Note: don't pass model_cfg="" — that empty string would override
+    # segment_section's default SAM2 config and make SAM2 silently fail to
+    # load (falling back to watershed). Omit it so the default applies.
     seg_result = segment_section(
         gray,
         resolution_mu=resolution_mu,
@@ -128,7 +131,6 @@ def _process_section_gui(
         max_diam=max_diam,
         use_sam2=use_sam2,
         checkpoint=sam2_checkpoint,
-        model_cfg="",
     )
     if seg_result is None:
         return None
@@ -180,6 +182,18 @@ def _process_curvature_gui(
     return None
 
 
+def _warn_duplicate_names(uploads):
+    """Warn if any uploaded files share a filename (ambiguous source_file)."""
+    names = [u.name for u in uploads]
+    dups = sorted({n for n in names if names.count(n) > 1})
+    if dups:
+        st.warning(
+            "Duplicate filenames uploaded — the `source_file` column will be "
+            "ambiguous for these (each file is still measured separately): "
+            + ", ".join(dups)
+        )
+
+
 def _metric_histograms(df, metrics, suptitle):
     """Simple ungrouped histograms of the given (column, label) metrics.
 
@@ -187,12 +201,15 @@ def _metric_histograms(df, metrics, suptitle):
     per-image sanity view — not a grouped statistical analysis.
     """
     import matplotlib.pyplot as plt
+    import numpy as np
 
-    series = [
-        (label, df[col].dropna())
-        for col, label in metrics
-        if col in df.columns and df[col].notna().sum() >= 2
-    ]
+    series = []
+    for col, label in metrics:
+        if col not in df.columns:
+            continue
+        vals = df[col].replace([np.inf, -np.inf], np.nan).dropna()
+        if len(vals) >= 2:
+            series.append((label, vals))
     if not series:
         return None
     fig, axes = plt.subplots(1, len(series), figsize=(5 * len(series), 4))
@@ -223,7 +240,7 @@ _UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 
 
 # ============================================================
-# TAB 1 — Quick Test (file upload + in-process run)
+# TAB 1 — Cross-Section (file upload + in-process run)
 # ============================================================
 with tab_sec:
     st.header("Cross-Section Analysis")
@@ -241,7 +258,7 @@ with tab_sec:
     with st.expander("Settings", expanded=False):
         c1, c2, c3 = st.columns(3)
         sec_res_mu = c1.number_input(
-            "Resolution (px/µm)", value=4.25, step=0.01, key="sec_res_mu",
+            "Resolution (px/µm)", value=4.25, step=0.01, min_value=0.0001, key="sec_res_mu",
             help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
                  "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
         sec_min_d  = c2.number_input("Min diameter (µm)", value=30.0,  step=1.0, key="sec_min_d")
@@ -253,8 +270,9 @@ with tab_sec:
         if not sec_uploads:
             st.error("Upload at least one cross-section image.")
         else:
+            _warn_duplicate_names(sec_uploads)
             rows            = []
-            seg_store       = {}
+            seg_store       = []
             failed_sections = []
             progress        = st.progress(0, text="Processing…")
 
@@ -281,7 +299,7 @@ with tab_sec:
 
                     if out is not None:
                         result, gray_img, mask_img = out
-                        seg_store[uploaded.name] = (gray_img, mask_img)
+                        seg_store.append((uploaded.name, gray_img, mask_img))
                         row = {"image_type": "section", "source_file": uploaded.name}
                         row.update(result)
                         rows.append(row)
@@ -301,6 +319,9 @@ with tab_sec:
                 )
 
             if not rows:
+                # Clear any prior run's results so stale tables/masks don't linger.
+                st.session_state.pop("section_results", None)
+                st.session_state.pop("seg_store", None)
                 st.error("No cross-sections were measured.")
             else:
                 st.session_state["section_results"] = pd.DataFrame(rows)
@@ -370,7 +391,7 @@ with tab_sec:
                         a = (a - lo) / (hi - lo) * 255
                     return a.astype("uint8")
 
-                for fname, (gray, mask) in seg_store.items():
+                for fname, gray, mask in seg_store:
                     st.markdown(f"**{fname}**")
                     col_img, col_mask, col_overlay = st.columns(3)
                     gray_u8 = _to_u8(gray)
@@ -404,7 +425,7 @@ with tab_curv:
 
     with st.expander("Settings", expanded=False):
         c1, c2, c3 = st.columns(3)
-        curv_res_mm = c1.number_input("Resolution (px/mm)", value=132.0, step=1.0, key="curv_res_mm")
+        curv_res_mm = c1.number_input("Resolution (px/mm)", value=132.0, step=1.0, min_value=0.01, key="curv_res_mm")
         curv_window = c2.number_input("Taubin window (px)", value=50,    step=5,   key="curv_window")
         curv_clahe  = c3.toggle("CLAHE preprocessing",      value=False,           key="curv_clahe")
 
@@ -412,6 +433,7 @@ with tab_curv:
         if not curv_uploads:
             st.error("Upload at least one curvature image.")
         else:
+            _warn_duplicate_names(curv_uploads)
             rows     = []
             progress = st.progress(0, text="Processing…")
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -438,6 +460,7 @@ with tab_curv:
                 progress.progress(1.0, text="Done.")
 
             if not rows:
+                st.session_state.pop("curvature_results", None)
                 st.error("No curvature images were measured.")
             else:
                 st.session_state["curvature_results"] = pd.DataFrame(rows)
@@ -452,8 +475,8 @@ with tab_curv:
 
         curv_cols = {
             "source_file":       "File",
-            "curv_mean":         "Mean Curv (mm⁻¹)",
-            "curv_median":       "Median Curv (mm⁻¹)",
+            "curv_mean_mean":    "Mean Curvature (mm⁻¹)",
+            "curv_median_mean":  "Median Curvature (mm⁻¹)",
             "curl_index":        "Curl Index",
             "wave_count":        "Wave Count",
             "wave_count_per_mm": "Waves / mm",
@@ -473,7 +496,7 @@ with tab_curv:
         if len(curv_df) >= 2:
             fig = _metric_histograms(
                 curv_df,
-                [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
+                [("curv_mean_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
                 "Distribution across uploaded images",
             )
             if fig is not None:
@@ -841,7 +864,7 @@ with tab_results:
         st.dataframe(curv_df.dropna(axis=1, how="all"), use_container_width=True)
         if len(curv_df) >= 2:
             fig = _metric_histograms(
-                curv_df, [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
+                curv_df, [("curv_mean_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
                 "Curvature — distribution across images",
             )
             if fig is not None:
