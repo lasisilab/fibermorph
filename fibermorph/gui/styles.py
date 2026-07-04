@@ -103,6 +103,7 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
 [data-testid="stSidebar"] {{
   background:linear-gradient(160deg,{TEAL_900} 0%,{INDIGO_700} 118%);
   border-right:0;
+  width:240px !important; min-width:240px !important; max-width:240px !important;
 }}
 [data-testid="stSidebar"] > div:first-child {{ padding-top:2.6rem; position:relative; }}
 [data-testid="stSidebar"]::before {{
@@ -120,10 +121,14 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
 
 /* ---- Sidebar nav (buttons; active = primary, inactive = secondary) ---- */
 [data-testid="stSidebar"] .stButton > button {{
-  width:100%; text-align:left; justify-content:flex-start;
+  width:100%; text-align:left !important; justify-content:flex-start !important;
   font-family:'Plus Jakarta Sans', sans-serif; font-weight:600; font-size:14px;
   border:0; border-radius:10px; padding:9px 13px; margin:2px 0;
   transition:background 160ms ease;
+}}
+[data-testid="stSidebar"] .stButton > button > div,
+[data-testid="stSidebar"] .stButton > button p {{
+  text-align:left !important; justify-content:flex-start !important; width:100%;
 }}
 [data-testid="stSidebar"] .stButton > button[kind="secondary"] {{
   background:transparent; color:rgba(255,255,255,0.66); box-shadow:none;
