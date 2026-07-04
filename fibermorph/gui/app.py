@@ -51,10 +51,11 @@ st.caption(
 # Session state defaults
 # ---------------------------------------------------------------------------
 for _key, _default in [
-    ("sbatch_script",     ""),
-    ("section_results",   None),
-    ("curvature_results", None),
-    ("seg_store",         {}),
+    ("sbatch_script",       ""),
+    ("section_results",     None),
+    ("curvature_fragments", None),
+    ("curvature_summary",   None),
+    ("seg_store",           {}),
 ]:
     if _key not in st.session_state:
         st.session_state[_key] = _default
@@ -148,8 +149,19 @@ def _process_curvature_gui(
     resolution_mm: float,
     window_size: int,
     use_clahe: bool = False,
-) -> dict | None:
-    """Run curvature analysis on a single image; returns a dict of measurements."""
+    extended: bool = False,
+):
+    """Run curvature analysis on a single image.
+
+    Returns a dict {"fragments": DataFrame|None, "image_row": dict} or None.
+
+    The pipeline detects each connected fibre fragment, measures its length and
+    curvature, and writes that per-fragment table to analysis/ImageSum_<name>.csv
+    (columns curv_mean, curv_median, length — one row per fragment). We read that
+    back before the temp dir is removed so the GUI can show per-fragment results,
+    not just the per-image aggregate the pipeline returns.
+    """
+    import glob
     import tempfile as _tmpmod
     from fibermorph.analysis.curvature_pipeline import curvature_seq
 
@@ -164,15 +176,25 @@ def _process_curvature_gui(
             test=False,
             within_element=False,
             use_clahe=use_clahe,
-            extended_curvature=True,
+            extended_curvature=extended,
         )
-    if df is None:
-        return None
-    if hasattr(df, "empty") and df.empty:
-        return None
-    if hasattr(df, "iloc"):
-        return df.iloc[0].to_dict()
-    return None
+        if df is None or (hasattr(df, "empty") and df.empty):
+            return None
+        image_row = df.iloc[0].to_dict() if hasattr(df, "iloc") else {}
+
+        fragments = None
+        matches = glob.glob(os.path.join(out_dir, "**", "ImageSum_*.csv"),
+                            recursive=True)
+        if matches:
+            fdf = pd.read_csv(matches[0])
+            keep = [c for c in ("curv_mean", "curv_median", "length")
+                    if c in fdf.columns]
+            if keep:
+                fdf = fdf[keep].dropna(how="all").reset_index(drop=True)
+                fdf.insert(0, "fragment", range(1, len(fdf) + 1))
+                fragments = fdf
+
+    return {"fragments": fragments, "image_row": image_row}
 
 
 def _warn_duplicate_names(uploads):
@@ -440,13 +462,21 @@ with tab_curv:
                  "uneven across the image; may add noise on already-clean images.")
         curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
+        curv_ext = st.toggle(
+            "Show extended (experimental) metrics", value=False, key="curv_ext",
+            help="Curl index, wave count, and fibre diameter. These were added in "
+                 "the v2 student fork and are NOT part of the published fibermorph "
+                 "curvature method — treat them as experimental. (Diameter is "
+                 "medial-axis / skeleton based, consistent with the method.)")
 
     if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
         if not curv_uploads:
             st.error("Upload at least one curvature image.")
         else:
             _warn_duplicate_names(curv_uploads)
-            rows     = []
+            frag_frames = []
+            summ_rows   = []
+            failed      = []
             progress = st.progress(0, text="Processing…")
             with tempfile.TemporaryDirectory() as tmpdir:
                 for idx, uploaded in enumerate(curv_uploads):
@@ -461,69 +491,131 @@ with tab_curv:
                             resolution_mm=float(curv_res_mm),
                             window_size=int(curv_window),
                             use_clahe=bool(curv_clahe),
+                            extended=bool(curv_ext),
                         )
                     except Exception as e:
                         st.warning(f"{uploaded.name}: {e}")
                         result = None
-                    if result is not None:
-                        row = {"image_type": "curvature", "source_file": uploaded.name}
-                        row.update(result)
-                        rows.append(row)
+
+                    frags = result.get("fragments") if result else None
+                    if frags is not None and not frags.empty:
+                        f = frags.copy()
+                        f.insert(0, "source_file", uploaded.name)
+                        frag_frames.append(f)
+                        summ = {
+                            "source_file":   uploaded.name,
+                            "n_fragments":   int(len(frags)),
+                            "curv_mean":     float(frags["curv_mean"].mean()),
+                            "curv_median":   float(frags["curv_mean"].median()),
+                            "length_mean":   float(frags["length"].mean()),
+                            "length_median": float(frags["length"].median()),
+                            "length_total":  float(frags["length"].sum()),
+                        }
+                        if curv_ext:
+                            ir = (result or {}).get("image_row", {}) or {}
+                            for k in ("curl_index", "wave_count",
+                                      "wave_count_per_mm", "diameter_mean_mu"):
+                                if k in ir:
+                                    summ[k] = ir[k]
+                        summ_rows.append(summ)
+                    else:
+                        failed.append(uploaded.name)
                 progress.progress(1.0, text="Done.")
 
-            if not rows:
-                st.session_state.pop("curvature_results", None)
-                st.error("No curvature images were measured.")
+            if failed:
+                st.warning(
+                    "No fibre fragments were measured in: " + ", ".join(failed)
+                    + ". Check the **Resolution** (px/mm) and that the fibres are "
+                    "visible against the background."
+                )
+            if not frag_frames:
+                st.session_state.pop("curvature_fragments", None)
+                st.session_state.pop("curvature_summary", None)
+                st.error("No curvature fragments were measured.")
             else:
-                st.session_state["curvature_results"] = pd.DataFrame(rows)
-                st.success(f"Measured {len(rows)} / {len(curv_uploads)} image(s).")
+                st.session_state["curvature_fragments"] = pd.concat(
+                    frag_frames, ignore_index=True)
+                st.session_state["curvature_summary"] = pd.DataFrame(summ_rows)
+                n_frag = int(sum(len(f) for f in frag_frames))
+                st.success(f"Measured {n_frag} fragment(s) across "
+                           f"{len(summ_rows)} / {len(curv_uploads)} image(s).")
 
-    curv_df = st.session_state.get("curvature_results")
-    if curv_df is not None and not curv_df.empty:
+    frag_df = st.session_state.get("curvature_fragments")
+    summ_df = st.session_state.get("curvature_summary")
+    if frag_df is not None and not frag_df.empty:
         import matplotlib.pyplot as plt
 
         st.divider()
-        st.metric("Curvature images measured", len(curv_df))
+        m1, m2 = st.columns(2)
+        m1.metric("Fragments measured", len(frag_df))
+        m2.metric("Images", frag_df["source_file"].nunique())
 
-        curv_cols = {
-            "source_file":       "File",
-            "curv_mean_mean":    "Mean Curvature (mm⁻¹)",
-            "curv_median_mean":  "Median Curvature (mm⁻¹)",
-            "curl_index":        "Curl Index",
-            "wave_count":        "Wave Count",
-            "wave_count_per_mm": "Waves / mm",
-            "hair_count":        "Fiber Count",
-            "length_total":      "Total Length (mm)",
-            "diameter_mean_mu":  "Fiber Diam (µm)",
+        # --- Per-fragment table (primary output) ---
+        st.markdown("**Per-fragment measurements** — one row per fibre fragment")
+        frag_cols = {
+            "source_file": "File",
+            "fragment":    "Fragment",
+            "length":      "Length (mm)",
+            "curv_mean":   "Mean Curvature (mm⁻¹)",
+            "curv_median": "Median Curvature (mm⁻¹)",
         }
-        present = {k: v for k, v in curv_cols.items() if k in curv_df.columns}
-        st.markdown("**Key Measurements**")
+        fpresent = {k: v for k, v in frag_cols.items() if k in frag_df.columns}
         st.dataframe(
-            curv_df[list(present.keys())].rename(columns=present).style.format(
-                {c: "{:.3f}" for c in list(present.values())[1:]}
-            ),
+            frag_df[list(fpresent.keys())].rename(columns=fpresent).style.format({
+                "Length (mm)":             "{:.3f}",
+                "Mean Curvature (mm⁻¹)":   "{:.4f}",
+                "Median Curvature (mm⁻¹)": "{:.4f}",
+            }),
             use_container_width=True,
         )
+        st.download_button(
+            "📥 Download per-fragment CSV",
+            data=frag_df.to_csv(index=False),
+            file_name="curvature_per_fragment.csv",
+            mime="text/csv",
+        )
 
-        if len(curv_df) >= 2:
+        # --- Per-image summary (aggregated across fragments) ---
+        if summ_df is not None and not summ_df.empty:
+            st.markdown("**Per-image summary** — aggregated across each image's fragments")
+            summ_labels = {
+                "source_file":       "File",
+                "n_fragments":       "Fragments",
+                "curv_mean":         "Mean Curvature (mm⁻¹)",
+                "curv_median":       "Median Curvature (mm⁻¹)",
+                "length_mean":       "Mean Length (mm)",
+                "length_median":     "Median Length (mm)",
+                "length_total":      "Total Length (mm)",
+                "curl_index":        "Curl Index (v2)",
+                "wave_count":        "Wave Count (v2)",
+                "wave_count_per_mm": "Waves/mm (v2)",
+                "diameter_mean_mu":  "Diameter µm (v2)",
+            }
+            spresent = {k: v for k, v in summ_labels.items() if k in summ_df.columns}
+            fmt = {v: "{:.4f}" for k, v in spresent.items()
+                   if k not in ("source_file", "n_fragments", "wave_count")}
+            st.dataframe(
+                summ_df[list(spresent.keys())].rename(columns=spresent).style.format(fmt),
+                use_container_width=True,
+            )
+            st.download_button(
+                "📥 Download per-image summary CSV",
+                data=summ_df.to_csv(index=False),
+                file_name="curvature_per_image.csv",
+                mime="text/csv",
+            )
+
+        # --- Distribution across fragments ---
+        if len(frag_df) >= 2:
             fig = _metric_histograms(
-                curv_df,
-                [("curv_mean_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
-                "Distribution across uploaded images",
+                frag_df,
+                [("length", "Fragment Length (mm)"),
+                 ("curv_mean", "Fragment Mean Curvature (mm⁻¹)")],
+                "Distribution across fragments",
             )
             if fig is not None:
                 st.pyplot(fig)
                 plt.close(fig)
-        else:
-            st.info("Upload 2 or more curvature images to see a distribution. "
-                    "The per-image measurements are in the table above and the CSV.")
-
-        st.download_button(
-            "📥 Download curvature CSV",
-            data=curv_df.to_csv(index=False),
-            file_name="curvature_results.csv",
-            mime="text/csv",
-        )
 
 
 # ============================================================
