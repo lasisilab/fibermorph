@@ -132,3 +132,4 @@ __pycache__
 coverage.xml
 .htmlcov/
 *.coverfibermorph/fibermorph_old.py
+/.claude
