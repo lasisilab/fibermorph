@@ -277,8 +277,8 @@ def batch(
 ) -> bool:
     """Run batch analysis on section and/or curvature image directories.
 
-    Produces hair_analysis_per_image.csv and hair_analysis_per_sample.csv
-    in a timestamped subdirectory of main_output_path.
+    Produces hair_analysis_per_image.csv (one row per image; no per-sample
+    aggregation) in a timestamped subdirectory of main_output_path.
 
     Parameters
     ----------

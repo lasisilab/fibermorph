@@ -1,97 +1,82 @@
-"""Unit tests for pipeline.batch module (metadata parsing and per-sample aggregation)."""
+"""Unit tests for pipeline.batch — per-image output with canonical labels.
+
+The batch pipeline no longer aggregates per sample; it emits one row per source
+image (with the filename and lenient individual/sample/side labels) and leaves
+grouping to downstream analysis.
+"""
+
+import os
 
 import numpy as np
 import pandas as pd
-import pytest
+from PIL import Image
+from skimage import draw as sk_draw
 
-from fibermorph.pipeline.batch import _aggregate_per_sample
+from fibermorph.pipeline.batch import run_batch
 
 
-class TestAggregatePerSample:
-    """Tests for the per-sample aggregation logic."""
+def _make_section_tiff(path: str, size: int = 200, radius: int = 40) -> None:
+    """A dark disk on a bright field — segments with the classical watershed."""
+    img = np.ones((size, size), dtype=np.uint8) * 220
+    rr, cc = sk_draw.disk((size // 2, size // 2), radius, shape=img.shape)
+    img[rr, cc] = 30
+    Image.fromarray(img, mode="L").save(path)
 
-    def _make_df(self) -> pd.DataFrame:
-        return pd.DataFrame([
-            {"sample_id": "140025", "region": "A", "image_type": "section",
-             "area_mu2": 100.0, "circularity": 0.90, "shape_class": "Circular"},
-            {"sample_id": "140025", "region": "A", "image_type": "section",
-             "area_mu2": 110.0, "circularity": 0.88, "shape_class": "Circular"},
-            {"sample_id": "140025", "region": "A", "image_type": "section",
-             "area_mu2": 105.0, "circularity": 0.92, "shape_class": "Elliptical"},
-            {"sample_id": "140025", "region": "B", "image_type": "section",
-             "area_mu2": 200.0, "circularity": 0.70, "shape_class": "Flattened"},
-            {"sample_id": "200001", "region": "A", "image_type": "curvature",
-             "curv_mean": 0.5, "curl_index": 1.2, "shape_class": None},
-        ])
 
-    def test_returns_dataframe(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
+class TestRunBatchPerImage:
+    def test_per_image_only_no_per_sample(self, tmp_path):
+        sec_dir = tmp_path / "sections"
+        out_dir = tmp_path / "out"
+        sec_dir.mkdir()
+        out_dir.mkdir()
+        # canonical names: Individual_Sample_Side
+        _make_section_tiff(str(sec_dir / "Y_5_A.tiff"))
+        _make_section_tiff(str(sec_dir / "Y_5_B.tiff"))
+
+        result = run_batch(
+            section_dir=str(sec_dir), curv_dir=None, output_dir=str(out_dir),
+            resolution_mu=4.25, min_diam=10, max_diam=300,
+            use_sam2=False, extended_features=False,
+        )
+
+        # returns a single per-image DataFrame (not a tuple)
         assert isinstance(result, pd.DataFrame)
+        assert not isinstance(result, tuple)
+        assert len(result) == 2
 
-    def test_number_of_groups(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        # 3 unique (sample_id, region, image_type) combos
-        assert len(result) == 3
+        # per-image CSV written; per-sample CSV must NOT exist
+        assert (out_dir / "hair_analysis_per_image.csv").exists()
+        assert not (out_dir / "hair_analysis_per_sample.csv").exists()
 
-    def test_mean_columns_exist(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        assert "area_mu2_mean" in result.columns
-        assert "circularity_mean" in result.columns
+    def test_labels_and_source_file_columns(self, tmp_path):
+        sec_dir = tmp_path / "sections"
+        out_dir = tmp_path / "out"
+        sec_dir.mkdir()
+        out_dir.mkdir()
+        _make_section_tiff(str(sec_dir / "Y_5_B.tiff"))
 
-    def test_std_columns_exist(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        assert "area_mu2_std" in result.columns
+        result = run_batch(
+            section_dir=str(sec_dir), curv_dir=None, output_dir=str(out_dir),
+            resolution_mu=4.25, min_diam=10, max_diam=300,
+            use_sam2=False, extended_features=False,
+        )
+        row = result.iloc[0]
+        assert row["source_file"] == "Y_5_B.tiff"
+        assert row["individual"] == "Y"
+        assert row["sample"] == "5"
+        assert row["side"] == "B"
+        # no legacy grouping columns
+        for legacy in ("sample_id", "region", "replicate"):
+            assert legacy not in result.columns
 
-    def test_n_valid_column_exists(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        assert "n_valid" in result.columns
-
-    def test_mean_values_correct(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        row = result[
-            (result["sample_id"] == "140025") &
-            (result["region"] == "A") &
-            (result["image_type"] == "section")
-        ]
-        assert len(row) == 1
-        expected_mean = (100.0 + 110.0 + 105.0) / 3
-        assert abs(row.iloc[0]["area_mu2_mean"] - expected_mean) < 1e-6
-
-    def test_shape_class_mode(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        if "shape_class_mode" in result.columns:
-            row = result[
-                (result["sample_id"] == "140025") &
-                (result["region"] == "A") &
-                (result["image_type"] == "section")
-            ]
-            # "Circular" appears twice vs "Elliptical" once
-            assert row.iloc[0]["shape_class_mode"] == "Circular"
-
-    def test_n_valid_counts(self):
-        df = self._make_df()
-        result = _aggregate_per_sample(df)
-        row = result[
-            (result["sample_id"] == "140025") &
-            (result["region"] == "A") &
-            (result["image_type"] == "section")
-        ]
-        assert row.iloc[0]["n_valid"] == 3
-
-    def test_empty_dataframe_returns_empty(self):
-        result = _aggregate_per_sample(pd.DataFrame())
+    def test_empty_input_returns_empty_dataframe(self, tmp_path):
+        sec_dir = tmp_path / "sections"
+        out_dir = tmp_path / "out"
+        sec_dir.mkdir()
+        out_dir.mkdir()
+        result = run_batch(
+            section_dir=str(sec_dir), curv_dir=None, output_dir=str(out_dir),
+            use_sam2=False, extended_features=False,
+        )
         assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
-
-    def test_no_group_keys_returns_empty(self):
-        df = pd.DataFrame([{"area_mu2": 100, "circularity": 0.9}])
-        result = _aggregate_per_sample(df)
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
+        assert result.empty

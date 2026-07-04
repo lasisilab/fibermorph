@@ -5,53 +5,45 @@ import tempfile
 
 import pytest
 
-from fibermorph.utils.metadata import parse_metadata, collect_images
+from fibermorph.utils.metadata import parse_canonical_name, collect_images
 
 
-class TestParseMetadata:
-    """Tests for parse_metadata filename parser."""
+class TestParseCanonicalName:
+    """Tests for the lenient canonical Individual_Sample_Side parser."""
 
-    def test_standard_format(self):
-        result = parse_metadata("140025_A_3.tiff")
-        assert result["sample_id"] == "140025"
-        assert result["region"] == "A"
-        assert result["replicate"] == "3"
+    def test_full_convention(self):
+        result = parse_canonical_name("Y_5_B.tif")
+        assert result == {"individual": "Y", "sample": "5", "side": "B"}
 
-    def test_standard_format_case_insensitive_region(self):
-        result = parse_metadata("140025_b_1.tiff")
-        assert result["region"] == "B"
+    def test_strips_path_and_extension(self):
+        result = parse_canonical_name("/some/path/P_3_A.tiff")
+        assert result["individual"] == "P"
+        assert result["sample"] == "3"
+        assert result["side"] == "A"
 
-    def test_standard_format_strip_extension(self):
-        result = parse_metadata("/some/path/200001_C_2.tif")
-        assert result["sample_id"] == "200001"
-        assert result["region"] == "C"
-        assert result["replicate"] == "2"
+    def test_extra_tokens_are_dropped(self):
+        # trailing acquisition info after Side is ignored
+        result = parse_canonical_name("Y_5_B_12.5mag.tif")
+        assert result == {"individual": "Y", "sample": "5", "side": "B"}
 
-    def test_p_prefix_format(self):
-        result = parse_metadata("P1200851.tiff")
-        assert result["sample_id"] == "P1200851"
-        assert result["region"] == ""
-        assert result["replicate"] == ""
+    def test_missing_side(self):
+        result = parse_canonical_name("Y_5.tif")
+        assert result == {"individual": "Y", "sample": "5", "side": ""}
 
-    def test_p_prefix_case_insensitive(self):
-        result = parse_metadata("p9876543.tif")
-        assert result["sample_id"].lower().startswith("p")
+    def test_missing_sample_and_side(self):
+        result = parse_canonical_name("Y.tif")
+        assert result == {"individual": "Y", "sample": "", "side": ""}
 
-    def test_unknown_format_uses_stem(self):
-        result = parse_metadata("random_image_name.tiff")
-        assert result["sample_id"] == "random_image_name"
-        assert result["region"] == ""
-        assert result["replicate"] == ""
+    def test_non_conforming_name_still_parses(self):
+        # never raises; whatever precedes the first underscore is the individual
+        result = parse_canonical_name("randomname.tif")
+        assert result["individual"] == "randomname"
+        assert result["sample"] == ""
+        assert result["side"] == ""
 
-    def test_returns_dict_with_required_keys(self):
-        result = parse_metadata("anything.tif")
-        assert "sample_id" in result
-        assert "region" in result
-        assert "replicate" in result
-
-    def test_standard_multi_digit_replicate(self):
-        result = parse_metadata("100000_A_10.tiff")
-        assert result["replicate"] == "10"
+    def test_always_returns_three_keys(self):
+        result = parse_canonical_name("anything.tif")
+        assert set(result) == {"individual", "sample", "side"}
 
 
 class TestCollectImages:

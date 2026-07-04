@@ -10,7 +10,7 @@ except importlib.metadata.PackageNotFoundError:
 # Always-available utilities (pure Python / lightweight deps only)
 from .utils.filesystem import make_subdirectory, copy_if_exist, list_images
 from .utils.timing import convert, timing
-from .utils.metadata import parse_metadata, collect_images
+from .utils.metadata import parse_canonical_name, collect_images
 
 # Core curvature functions (numpy + scipy only — no cv2)
 from .core.curvature import (
@@ -69,7 +69,7 @@ __all__ = [
     "list_images",
     "convert",
     "timing",
-    "parse_metadata",
+    "parse_canonical_name",
     "collect_images",
     # Core curvature
     "taubin_curv",

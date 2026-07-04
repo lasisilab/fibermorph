@@ -1,9 +1,10 @@
 """Batch processor for section and/or curvature image directories.
 
-Produces two CSVs in output_dir:
-  hair_analysis_per_image.csv   — one row per source image
-  hair_analysis_per_sample.csv  — one row per sample_id × region × image_type
-                                  (mean/std across replicates; shape_class mode)
+Produces one CSV in output_dir:
+  hair_analysis_per_image.csv   — one row per source image, with the source
+                                  filename and lenient individual/sample/side
+                                  labels parsed from it. No grouping/aggregation
+                                  is performed; that is left to downstream analysis.
 
 Section and curvature pipelines run independently; either can be omitted.
 """
@@ -18,7 +19,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from ..utils.metadata import collect_images, parse_metadata
+from ..utils.metadata import collect_images, parse_canonical_name
 
 
 def _process_dir(
@@ -39,14 +40,14 @@ def _process_dir(
             # result may be a dict (extended) or a pd.DataFrame (legacy)
             if isinstance(result, dict):
                 row = {"image_type": image_type, "source_file": fname}
-                row.update(parse_metadata(fname))
+                row.update(parse_canonical_name(fname))
                 row.update(result)
                 rows.append(row)
             elif isinstance(result, pd.DataFrame) and not result.empty:
                 row_dict = result.iloc[0].to_dict()
                 row_dict["image_type"]  = image_type
                 row_dict["source_file"] = fname
-                row_dict.update(parse_metadata(fname))
+                row_dict.update(parse_canonical_name(fname))
                 rows.append(row_dict)
             else:
                 failed += 1
@@ -76,7 +77,7 @@ def run_batch(
     extended_curvature: bool = True,
     use_clahe: bool      = False,
     jobs: int            = 1,
-) -> tuple:
+) -> pd.DataFrame:
     """Run batch processing for section and/or curvature images.
 
     Parameters
@@ -100,7 +101,7 @@ def run_batch(
 
     Returns
     -------
-    (per_image_df, per_sample_df)
+    per_image_df : one row per source image (empty DataFrame if nothing processed)
     """
     os.makedirs(output_dir, exist_ok=True)
     all_rows: list = []
@@ -187,12 +188,13 @@ def run_batch(
 
     if not all_rows:
         print("\nNo results produced. Check input paths and image formats.")
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
 
     per_image = pd.DataFrame(all_rows)
 
-    # Put metadata columns first
-    meta_cols    = ["sample_id", "region", "replicate", "image_type",
+    # Label columns first (parsed leniently from the filename; the pipeline does
+    # NOT group by them — grouping is left to the user's downstream analysis).
+    meta_cols    = ["individual", "sample", "side", "image_type",
                     "source_file", "segmentation_method"]
     present_meta = [c for c in meta_cols if c in per_image.columns]
     other_cols   = [c for c in per_image.columns if c not in present_meta]
@@ -202,42 +204,4 @@ def run_batch(
     per_image.to_csv(per_image_path, index=False)
     print(f"\nPer-image CSV  → {per_image_path}  ({len(per_image)} rows)")
 
-    per_sample      = _aggregate_per_sample(per_image)
-    per_sample_path = os.path.join(output_dir, "hair_analysis_per_sample.csv")
-    per_sample.to_csv(per_sample_path, index=False)
-    print(f"Per-sample CSV → {per_sample_path}  ({len(per_sample)} rows)")
-
-    return per_image, per_sample
-
-
-def _aggregate_per_sample(df: pd.DataFrame) -> pd.DataFrame:
-    """Group by (sample_id, region, image_type); compute mean ± std for numeric columns."""
-    group_keys = [c for c in ["sample_id", "region", "image_type"] if c in df.columns]
-    if not group_keys:
-        return pd.DataFrame()
-
-    numeric = df.select_dtypes(include=[np.number]).columns.tolist()
-    grouped = df.groupby(group_keys, observed=True)
-
-    summary          = grouped[numeric].agg(["mean", "std"])
-    summary.columns  = [f"{col}_{stat}" for col, stat in summary.columns]
-    summary          = summary.reset_index()
-
-    counts  = grouped.size().reset_index(name="n_valid")
-    summary = summary.merge(counts, on=group_keys, how="left")
-
-    if "shape_class" in df.columns:
-        def _mode_or_empty(x):
-            non_null = x.dropna()
-            m = non_null.mode()
-            return m.iloc[0] if len(m) > 0 else ""
-
-        modes = (
-            df.groupby(group_keys, observed=True)["shape_class"]
-            .agg(_mode_or_empty)
-            .reset_index()
-            .rename(columns={"shape_class": "shape_class_mode"})
-        )
-        summary = summary.merge(modes, on=group_keys, how="left")
-
-    return summary
+    return per_image
