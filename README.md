@@ -3,19 +3,18 @@
 
 # fibermorph
 
-**Interactive toolkit for analyzing hair fiber morphology**
+**Interactive toolkit for analyzing fiber morphology**
 
-fibermorph provides powerful image analysis tools for studying hair curvature and cross-sections, with both an intuitive **graphical interface** and a command-line interface for advanced users.
+fibermorph provides powerful image analysis tools for studying fiber curvature and cross-sections, with both an intuitive **graphical interface** and a command-line interface for advanced users.
 
 ### What's new in v2.0
-- **SAM2 GPU segmentation** for cross-sections (optional; falls back to watershed on CPU)
-- **EFD + Hu moments + radial profile + shape classification** for cross-sections (`--extended-features`)
-- **Curl index, wave count, fiber diameter** from medial-axis skeleton (`--extended-curvature`)
+- **Streamlit GUI** with a sidebar console: **Cross-Section**, **Curvature**, **Run Local**, and **Run Remote** views
+- **Per-fragment curvature** in the GUI — each fiber fragment's length and curvature, plus per-image summaries and distribution histograms
+- **Flexible resolution units** — enter px/µm or µm/px (px/mm or mm/px) in the GUI or CLI and it converts for you
+- **Run locally for large images** — `fibermorph-gui` raises the upload cap and adds a "Folder on disk" input (read images straight from disk)
+- **SAM2 GPU segmentation** for cross-sections (optional; falls back to watershed on CPU), with extended shape features (`--extended-features`)
 - **CLAHE preprocessing** for curvature images with uneven illumination (`--use-clahe`)
-- **5-tab Streamlit GUI**: Quick Test, Segmentation Preview, Batch (Cluster), Submit & Monitor, Results
-- **SLURM SBATCH script generation** directly from the GUI
-- **Batch pipeline** with per-sample aggregation (`hair_analysis_per_image.csv` + `hair_analysis_per_sample.csv`)
-- **18 publication-ready visualization figures**
+- **SBATCH script generation** from the GUI's Run Remote view (build & download — you submit it yourself)
 - **GPU Docker target** for container deployment with SAM2
 
 ## 🚀 Quick Start with the GUI (Recommended)
@@ -34,12 +33,13 @@ pip install "fibermorph[gui]"
 fibermorph-gui
 ```
 
-The 5-tab interface provides:
-- **Quick Test**: upload images and run analysis immediately (no SLURM needed)
-- **Segmentation**: review input/mask/overlay for cross-section images
-- **Batch (Cluster)**: configure settings and generate an SBATCH script
-- **Submit & Monitor**: submit the script and watch live job status
-- **Results**: load CSVs and explore 18 publication-ready figures
+The sidebar console has four views:
+- **Cross-Section**: upload images, segment (SAM2 / watershed) and measure cross-section shape — results and mask previews appear inline
+- **Curvature**: measure per-fragment length and curvature, with per-image summaries and distribution charts
+- **Run Local**: how to run this same GUI on your own machine (no upload limit; read images straight from a folder)
+- **Run Remote**: build a downloadable SBATCH script to run the CLI on an HPC cluster (it does not submit jobs for you)
+
+> The hosted app is upload-only (500 MB per file). To analyze larger images, run it locally — see **Run locally from source** below.
 
 ## 📦 Installation
 
@@ -89,6 +89,28 @@ wget -O fibermorph/checkpoints/sam2.1_hiera_tiny.pt \
 
 Without SAM2, fibermorph automatically falls back to the watershed segmentation path — no crash, no manual intervention required.
 
+## 💻 Run locally from source
+
+The published PyPI package can lag behind the latest code. To run the **current**
+code — including everything in the GUI's **Run Local** view — install the repo
+itself in editable mode:
+
+```bash
+git clone https://github.com/lasisilab/fibermorph.git
+cd fibermorph
+python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.10–3.12
+pip install -e '.[gui]'        # editable install of this working copy
+fibermorph-gui                 # opens the local GUI at http://localhost:8501
+```
+
+Launched this way, the GUI runs on your own machine with the upload cap raised to
+**5 GB** and a **"Folder on disk"** input on the Cross-Section and Curvature views,
+so you can analyze images that are too large to upload to the hosted app. (On a
+machine's first-ever Streamlit run it may briefly ask for an email — the launcher
+skips that for you.)
+
+The CLI works from the same checkout too: `fibermorph --help`.
+
 ## 🐳 Docker
 
 ### CPU-only (default)
@@ -136,8 +158,9 @@ fibermorph --curvature \
 ```
 
 New curvature flags:
-- `--use-clahe` — CLAHE contrast enhancement before Frangi ridge filter
-- `--extended-curvature` — adds `curl_index`, `wave_count`, `diameter_mean_mu`, `curv_std`, `curv_cv`, `curv_iqr` columns
+- `--use-clahe` — CLAHE contrast enhancement before the Frangi ridge filter
+- `--extended-curvature` — adds `curl_index`, `curl_index_std`, `wave_count`, `wave_count_per_mm`, and `length_total` columns (experimental — from the v2 fork; validate before relying on them)
+- `--resolution_mm_units {px_per_mm,mm_per_px}` — interpret `--resolution_mm` as pixels-per-mm (default) or mm-per-pixel
 
 ### Section analysis
 
@@ -165,6 +188,7 @@ New section flags:
 - `--sam2-checkpoint PATH` — path to SAM2 `.pt` weights file
 - `--sam2-cfg PATH` — path to SAM2 model config YAML (optional; uses bundled default)
 - `--extended-features` — adds EFD (40 coefficients), Hu moments (7), radial profile (7 metrics), `shape_class`
+- `--resolution_mu_units {px_per_um,um_per_px}` — interpret `--resolution_mu` as pixels-per-micron (default) or microns-per-pixel (e.g. a 0.18 scale)
 
 ## Install the package
 
@@ -200,7 +224,7 @@ To run the demo, you will input something like:
 `fibermorph --demo_real_section --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName`
 
 ### Curvature
-To calculate curvature from grayscale TIFF images of hair fibers, the flag `--curvature` is used with the following flags in addition to input and output directories:
+To calculate curvature from grayscale TIFF images of fibers, the flag `--curvature` is used with the following flags in addition to input and output directories:
 ```
 --resolution_mm       	Integer. Number of pixels per mm for
 						curvature analysis.
@@ -209,13 +233,13 @@ To calculate curvature from grayscale TIFF images of hair fibers, the flag `--cu
 						window of measurement
 						for curvature analysis in pixels or mm (given
 						the flag --window_unit). If nothing is entered, the default
-						is None and the entire hair will be used to for the curve fitting."
+						is None and the entire fiber will be used to for the curve fitting."
 --window_unit {px,mm}	String. Unit of measurement for window of
 						measurement for curvature
                       	analysis. Can be 'px' (pixels) or 'mm'. Default is 'px'.
 -W, --within_element  	Boolean. Default is False. Will create
 						an additional directory with
-                      	spreadsheets of raw curvature measurements for each hair if the
+                      	spreadsheets of raw curvature measurements for each fiber if the
                       	--within_element flag is included.
 -s, --save_image      	Default is False. Will save intermediate
 						curvature/section processing images if
@@ -229,7 +253,7 @@ fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --o
 ```
 
 ### Section
-To calculate cross-sectional properties from grayscale TIFF images of hair fibers, the flag `--section` is used with the following flags:
+To calculate cross-sectional properties from grayscale TIFF images of fibers, the flag `--section` is used with the following flags:
 ```
 --resolution_mu       Float. Number of pixels per micron for section analysis. Default is 4.25.
 --minsize             Integer. Minimum diameter in microns for sections. Default is 20.

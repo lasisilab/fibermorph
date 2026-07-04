@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> These changes refine the (not-yet-published) 2.0.0 line. The current PyPI
+> release is 1.0.1; 2.0.0 lives on the `fibermorph-dev` branch and has not been
+> tagged. At release time these entries can be folded into 2.0.0 or tagged a
+> new version.
+
+### Added
+- **Resolution in either direction.** GUI and CLI now accept resolution as
+  pixels-per-unit *or* unit-per-pixel and convert internally — GUI unit selector
+  (px/µm ↔ µm/px, px/mm ↔ mm/px), CLI `--resolution_mu_units {px_per_um,um_per_px}`
+  and `--resolution_mm_units {px_per_mm,mm_per_px}`. Prevents the
+  µm/px-vs-px/µm mix-up that silently corrupted calibrated measurements.
+  (`fibermorph.utils.units`)
+- **Per-fragment curvature in the GUI.** The Curvature view reports each detected
+  fiber fragment's length and mean/median curvature (one row per fragment), a
+  per-image summary, and per-sample + pooled distribution histograms (shared
+  x-axis for cross-sample comparison).
+- **Run Local.** `fibermorph-gui` runs the same GUI on your own machine with the
+  upload cap raised to 5 GB and a "Folder on disk" input that reads images
+  straight from a directory (no upload). A Run Local view documents this and
+  shows whether you are running hosted or local.
+- **Lasisi Lab GUI design system** (`fibermorph.gui.styles`): a left sidebar
+  console (brand lockup, grouped nav with SVG glyphs, status footer), per-view
+  headers, at-a-glance metric cards, and brand-colored charts.
+- Help text for the Taubin window and CLAHE controls in the GUI.
+
+### Changed
+- **GUI is now a sidebar console** with four views — **Cross-Section**,
+  **Curvature**, **Run Local**, **Run Remote** — replacing the previous top tab
+  bar (there is no "Submit & Monitor" or "Results" tab).
+- **"Run at scale" → "Run Remote".** It builds a downloadable SBATCH script with
+  generic placeholders; it does not submit or monitor jobs and no longer bakes in
+  personal account/partition/path defaults.
+- **Curvature output refocused.** Fragment-level length + mean/median curvature
+  are the primary output; the v2 extended metrics (curl index, wave count) moved
+  behind an off-by-default "extended (experimental)" toggle.
+- **Per-image analysis only.** Filename parsing and per-sample grouping removed;
+  each result row records only its `source_file`.
+- `fibermorph-gui` seeds an empty Streamlit credentials file on first run
+  (non-destructive) so it does not stall on Streamlit's one-time email prompt.
+
+### Removed
+- **Curvature diameter metric** (`diameter_mean_mu`, `diameter_cv`) and its
+  medial-axis distance-map computation — a v2 fork addition that is not yet
+  validated. The medial-axis skeleton used by the curl-index path is unchanged.
+- **Per-sample batch aggregation** (`hair_analysis_per_sample.csv`); the batch
+  pipeline now emits a single per-image table.
+
+### Fixed
+- **Section resolution unit mislabel** (`µm/px` where the code needs `px/µm`) in
+  the GUI and docstrings — the cause of "empty mask" segmentation failures on
+  correctly-focused images.
+- US spelling throughout the GUI (analyze, fiber, color).
+
 ## [2.0.0] - 2026-05-14
 
 ### Breaking Changes

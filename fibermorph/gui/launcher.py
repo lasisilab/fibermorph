@@ -7,6 +7,21 @@ import sys
 from pathlib import Path
 
 
+def _skip_streamlit_email_prompt() -> None:
+    """Write an empty Streamlit credentials file if the user has none, so the
+    one-time first-run email prompt doesn't block a fresh `fibermorph-gui`.
+
+    Non-destructive: never overwrites an existing credentials file.
+    """
+    cred = Path.home() / ".streamlit" / "credentials.toml"
+    try:
+        if not cred.exists():
+            cred.parent.mkdir(parents=True, exist_ok=True)
+            cred.write_text('[general]\nemail = ""\n')
+    except OSError:
+        pass  # non-fatal: worst case, Streamlit shows its usual prompt
+
+
 def main() -> None:
     """Launch the Streamlit GUI by running streamlit with the app module."""
     try:
@@ -23,6 +38,12 @@ def main() -> None:
     # only make sense on the user's own machine — reading images straight from
     # a folder on disk (no upload, no size limit).
     os.environ.setdefault("FIBERMORPH_LOCAL", "1")
+
+    # On a machine's first-ever Streamlit run, Streamlit interactively prompts
+    # for an email and blocks until the user answers — confusing for a launcher.
+    # Pre-seed an empty credentials file (only if the user has none) so
+    # `fibermorph-gui` starts straight into the app.
+    _skip_streamlit_email_prompt()
 
     # Get the path to the app.py file
     app_path = Path(__file__).parent / "app.py"
