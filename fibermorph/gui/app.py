@@ -1,20 +1,18 @@
 """
 fibermorph/gui/app.py — fibermorph Streamlit interface
 ======================================================
-Five tabs:
+Three tabs:
 
-  Cross-Section       — upload cross-section images, segment and measure them
-                        in-process; review input/mask/overlay inline.
+  Cross-Section    — upload cross-section images, segment and measure them
+                     in-process; results and mask previews appear inline.
 
-  Curvature           — upload curvature images and measure them in-process.
+  Curvature        — upload curvature images and measure them in-process;
+                     results appear inline.
 
-  Batch (Cluster)     — point to existing cluster directories, configure
-                        settings, and generate an SBATCH script.
-
-  Submit & Monitor    — submit the SBATCH script and watch job status.
-
-  Results             — load the per-image CSV and explore per-image
-                        measurements and simple distributions.
+  Run at scale     — documentation + an SBATCH script scaffold for running the
+                     fibermorph CLI on your own workstation or HPC cluster. It
+                     generates a script to download and submit yourself; it does
+                     not submit anything or connect to any cluster.
 
 Start via:
   fibermorph-gui
@@ -25,10 +23,7 @@ Start via:
 from __future__ import annotations
 
 import os
-import re
-import subprocess
 import tempfile
-import time
 from pathlib import Path
 
 import pandas as pd
@@ -40,27 +35,23 @@ from fibermorph.utils.units import resolution_to_px_per_unit
 # Page config — must be the first Streamlit call
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="fibermorph — Hair Analysis",
+    page_title="fibermorph",
     page_icon="🔬",
     layout="wide",
 )
 
-st.title("🔬 fibermorph — Hair Analysis Pipeline")
+st.title("🔬 fibermorph — Fiber Cross-Section & Curvature Analysis")
 st.caption(
     "Cross-section shape analysis (SAM2 / watershed) + curvature analysis. "
-    "Use the **Cross-Section** and **Curvature** tabs for a few uploaded images, "
-    "or **Batch (Cluster)** to submit a cluster job."
+    "Use the **Cross-Section** and **Curvature** tabs to analyse uploaded images, "
+    "or **Run at scale** to build an SBATCH script for the fibermorph CLI."
 )
 
 # ---------------------------------------------------------------------------
 # Session state defaults
 # ---------------------------------------------------------------------------
 for _key, _default in [
-    ("job_id",          None),
-    ("job_submitted",   False),
-    ("sbatch_script",   ""),
-    ("output_dir",      ""),
-    ("results_loaded",    False),
+    ("sbatch_script",     ""),
     ("section_results",   None),
     ("curvature_results", None),
     ("seg_store",         {}),
@@ -229,8 +220,8 @@ def _metric_histograms(df, metrics, suptitle):
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_sec, tab_curv, tab_upload, tab_submit, tab_results = st.tabs(
-    ["🔬 Cross-Section", "🌀 Curvature", "📁 Batch (Cluster)", "🚀 Submit & Monitor", "📊 Results"]
+tab_sec, tab_curv, tab_hpc = st.tabs(
+    ["🔬 Cross-Section", "🌀 Curvature", "🖥️ Run at scale"]
 )
 
 _FILENAME_NOTE = (
@@ -248,7 +239,8 @@ with tab_sec:
     st.header("Cross-Section Analysis")
     st.info(
         "Upload cross-section images to segment and measure them immediately on "
-        "this server. For large batches use the **Batch (Cluster)** tab."
+        "this server. For a whole study or very large images, use the "
+        "**Run at scale** tab."
     )
     st.caption(_FILENAME_NOTE)
 
@@ -419,7 +411,7 @@ with tab_curv:
     st.header("Curvature Analysis")
     st.info(
         "Upload curvature images to measure them immediately on this server. "
-        "For large batches use the **Batch (Cluster)** tab."
+        "For a whole study or very large images, use the **Run at scale** tab."
     )
     st.caption(_FILENAME_NOTE)
 
@@ -526,45 +518,53 @@ with tab_curv:
 
 
 # ============================================================
-# TAB 3 — Batch (Cluster)
+# TAB 3 — Run at scale (HPC)
 # ============================================================
-with tab_upload:
-    st.header("Batch — Cluster Paths & Settings")
-    st.caption(
-        "Images must already be on the cluster. "
-        "This generates an SBATCH script calling the `fibermorph` CLI that you "
-        "can review, then submit in the next tab."
+with tab_hpc:
+    st.header("Run at scale on your own cluster")
+    st.markdown(
+        "The tabs above analyse a few uploaded images right here in the browser. "
+        "For a whole study — or images too large to upload — run the **fibermorph "
+        "command-line tool** where your images already live (your workstation or an "
+        "HPC cluster):\n\n"
+        "```bash\n"
+        "pip install fibermorph\n"
+        "fibermorph --section -i /path/to/images -o /path/to/output --resolution_mu 5.556\n"
+        "```\n\n"
+        "This tab builds a matching **SBATCH script** you can download, edit, and "
+        "submit yourself with `sbatch`. It does **not** submit anything or connect to "
+        "any cluster — nothing here leaves your browser."
     )
 
+    st.divider()
+    st.subheader("1 · Inputs")
     col_sec, col_curv = st.columns(2)
     with col_sec:
-        st.subheader("Cross-Section Images")
         section_path = st.text_input(
-            "Cluster path to cross-section TIFF directory",
-            placeholder="/nfs/turbo/.../section/input/",
+            "Cross-section image directory (on the machine you'll run on)",
+            placeholder="/path/to/section/input/",
             key="section_path",
         )
         st.caption("Leave blank to skip cross-section analysis.")
 
     with col_curv:
-        st.subheader("Curvature Images")
         curv_path = st.text_input(
-            "Cluster path to curvature TIFF directory",
-            placeholder="/nfs/turbo/.../curvature/input/",
+            "Curvature image directory (on the machine you'll run on)",
+            placeholder="/path/to/curvature/input/",
             key="curv_path",
         )
         st.caption("Leave blank to skip curvature analysis.")
 
-    st.divider()
-    st.header("Output")
     output_dir_batch = st.text_input(
-        "Output directory (cluster path)",
-        value=str(Path.home() / "fibermorph_output"),
+        "Output directory",
+        value="fibermorph_output",
         key="output_dir_input",
+        help="Where fibermorph writes its CSVs. Relative to where you submit the "
+             "job, or an absolute path on your cluster.",
     )
 
     st.divider()
-    st.header("Settings")
+    st.subheader("2 · Settings")
 
     with st.expander("Cross-section settings", expanded=False):
         col1, col2, col3, col4 = st.columns(4)
@@ -597,21 +597,33 @@ with tab_upload:
         )
 
     with st.expander("SLURM settings", expanded=False):
-        col7, col8, col9 = st.columns(3)
-        slurm_account = col7.text_input("Account",  value="tlasisi0")
-        slurm_cpus    = col8.number_input("CPUs",   value=4,   step=1, min_value=1)
-        slurm_time    = col9.text_input("Walltime", value="04:00:00")
+        col_a, col_b, col_c = st.columns(3)
+        slurm_account       = col_a.text_input("Account", value="", placeholder="YOUR_ACCOUNT")
+        slurm_cpus          = col_b.number_input("CPUs", value=4, step=1, min_value=1)
+        slurm_time          = col_c.text_input("Walltime", value="04:00:00")
+        col_d, col_e        = st.columns(2)
+        slurm_partition     = col_d.text_input("Partition (CPU)", value="", placeholder="e.g. standard")
+        slurm_gpu_partition = col_e.text_input("Partition (GPU, for SAM2)", value="", placeholder="e.g. gpu")
+        st.caption(
+            "Account and partition names are specific to your cluster — check its "
+            "docs. Left blank, the script uses YOUR_ACCOUNT / YOUR_PARTITION "
+            "placeholders for you to fill in."
+        )
 
     st.divider()
-    if st.button("▶ Generate SBATCH Script", type="primary"):
+    st.subheader("3 · Generate script")
+    if st.button("▶ Generate SBATCH script", type="primary"):
         if not section_path and not curv_path:
             st.error("Provide at least one image directory.")
         elif not output_dir_batch:
             st.error("Provide an output directory.")
         else:
-            st.session_state["output_dir"] = output_dir_batch
-            partition = "spgpu" if use_sam2 else "standard"
-            mem_gb    = int(slurm_cpus) * 8
+            account = slurm_account.strip() or "YOUR_ACCOUNT"
+            if use_sam2:
+                partition = slurm_gpu_partition.strip() or "YOUR_GPU_PARTITION"
+            else:
+                partition = slurm_partition.strip() or "YOUR_PARTITION"
+            mem_gb = int(slurm_cpus) * 8
 
             # Build fibermorph CLI commands
             commands = []
@@ -652,7 +664,7 @@ with tab_upload:
             directives = [
                 "#!/bin/bash",
                 "#SBATCH --job-name=fibermorph",
-                f"#SBATCH --account={slurm_account}",
+                f"#SBATCH --account={account}",
                 f"#SBATCH --partition={partition}",
             ]
             if use_sam2:
@@ -672,10 +684,14 @@ with tab_upload:
                 "set -euo pipefail",
                 f'mkdir -p "{output_dir_batch}"',
                 "",
+                "# Activate the environment where you installed fibermorph, e.g.:",
+                "# module load python            # adjust for your cluster",
+                "# source ~/fibermorph-venv/bin/activate",
+                "",
             ]
             if use_sam2:
                 env_lines += [
-                    "# Load CUDA for SAM2 GPU segmentation",
+                    "# Load CUDA for SAM2 GPU segmentation (adjust module name for your cluster)",
                     "module load cuda",
                     "",
                     'echo "GPU(s): $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo none)"',
@@ -696,204 +712,20 @@ with tab_upload:
 
             script = "\n".join(directives) + "\n" + "\n".join(env_lines)
             st.session_state["sbatch_script"] = script
-            st.success("Script generated — go to the Submit & Monitor tab.")
 
-
-# ============================================================
-# TAB 4 — Submit & Monitor
-# ============================================================
-with tab_submit:
-    st.header("SBATCH Script")
-
-    if not st.session_state["sbatch_script"]:
-        st.info("Generate a script in the Batch (Cluster) tab first.")
-    else:
-        script_text = st.text_area(
-            "Review and edit before submitting:",
-            value=st.session_state["sbatch_script"],
-            height=420,
-            key="editable_script",
-        )
-        st.session_state["sbatch_script"] = script_text
-
-        col_sub, col_dl = st.columns([1, 1])
-
-        with col_sub:
-            if st.button("🚀 Submit Job", type="primary",
-                         disabled=st.session_state["job_submitted"]):
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".sbatch", delete=False
-                ) as f:
-                    f.write(st.session_state["sbatch_script"])
-                    sbatch_file = f.name
-                try:
-                    result = subprocess.run(
-                        ["sbatch", sbatch_file],
-                        capture_output=True, text=True, timeout=15,
-                    )
-                    if result.returncode == 0:
-                        match  = re.search(r"(\d+)", result.stdout)
-                        job_id = match.group(1) if match else "unknown"
-                        st.session_state["job_id"]        = job_id
-                        st.session_state["job_submitted"] = True
-                        st.success(f"Submitted! Job ID: **{job_id}**")
-                    else:
-                        st.error(f"sbatch failed:\n{result.stderr}")
-                except FileNotFoundError:
-                    st.error("`sbatch` not found — run this app on a SLURM login node.")
-                except Exception as e:
-                    st.error(f"Submission error: {e}")
-                finally:
-                    try:
-                        os.unlink(sbatch_file)
-                    except OSError:
-                        pass
-
-        with col_dl:
-            st.download_button(
-                "⬇ Download .sbatch script",
-                data=st.session_state["sbatch_script"],
-                file_name="run_fibermorph.sbatch",
-                mime="text/plain",
-            )
-
-        if st.session_state["job_id"]:
-            st.divider()
-            st.subheader(f"Job {st.session_state['job_id']} — Status")
-
-            col_stat, col_refresh = st.columns([3, 1])
-            with col_refresh:
-                auto_refresh = st.toggle("Auto-refresh (10s)", value=False)
-
-            try:
-                squeue = subprocess.run(
-                    ["squeue", "-j", str(st.session_state["job_id"]),
-                     "--noheader", "-o", "%T %M %R"],
-                    capture_output=True, text=True, timeout=10,
-                )
-                status_line = squeue.stdout.strip()
-            except Exception:
-                status_line = ""
-
-            if status_line:
-                parts = status_line.split()
-                state = parts[0] if parts else "UNKNOWN"
-                color = {
-                    "RUNNING":   "🟢",
-                    "PENDING":   "🟡",
-                    "FAILED":    "🔴",
-                    "COMPLETED": "✅",
-                }.get(state, "⚪")
-                col_stat.markdown(f"**Status**: {color} `{status_line}`")
-            else:
-                col_stat.markdown("**Status**: ✅ Job not in queue (completed or failed)")
-                st.session_state["results_loaded"] = False
-
-            log_path = os.path.join(
-                st.session_state["output_dir"],
-                f"slurm_{st.session_state['job_id']}.out",
-            )
-            if os.path.exists(log_path):
-                with open(log_path) as lf:
-                    tail = "".join(lf.readlines()[-40:])
-                st.text_area("Log (last 40 lines)", value=tail,
-                             height=300, disabled=True)
-
-            if auto_refresh:
-                time.sleep(10)
-                st.rerun()
-
-
-# ============================================================
-# TAB 5 — Results
-# ============================================================
-with tab_results:
-    st.header("Analysis Results")
-
-    results_dir = st.text_input(
-        "Results directory (cluster path):",
-        value=st.session_state.get("output_dir", ""),
-        key="results_dir_input",
-    )
-
-    if st.button("🔄 Load Results"):
-        per_image_path  = os.path.join(results_dir, "hair_analysis_per_image.csv")
-
-        # Also search inside timestamped subdirs produced by the batch workflow
-        if not os.path.exists(per_image_path) and results_dir and os.path.isdir(results_dir):
-            subdirs = sorted(
-                [d for d in Path(results_dir).iterdir() if d.is_dir()],
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )
-            for sub in subdirs:
-                candidate = sub / "hair_analysis_per_image.csv"
-                if candidate.exists():
-                    per_image_path = str(candidate)
-                    break
-
-        if not os.path.exists(per_image_path):
-            st.warning(f"Per-image CSV not found:\n{per_image_path}")
-        else:
-            st.session_state["per_image_df"]   = pd.read_csv(per_image_path)
-            st.session_state["results_loaded"] = True
-            st.success("Results loaded.")
-
-    if not st.session_state.get("results_loaded"):
-        st.stop()
-
-    import matplotlib.pyplot as plt
-
-    per_image = st.session_state.get("per_image_df", pd.DataFrame())
-
-    has_sec  = "image_type" in per_image.columns and \
-               (per_image["image_type"] == "section").any()
-    has_curv = "image_type" in per_image.columns and \
-               (per_image["image_type"] == "curvature").any()
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total images", len(per_image))
-    if has_sec:
-        m2.metric("Section images", int((per_image["image_type"] == "section").sum()))
-    if has_curv:
-        m3.metric("Curvature images", int((per_image["image_type"] == "curvature").sum()))
-
-    st.caption("Per-image measurements only. Each row carries its source "
-               "filename; do any within/between-individual grouping downstream.")
-    st.divider()
-
-    if has_sec:
-        sec_df = per_image[per_image["image_type"] == "section"]
-        st.subheader("Cross-Section — per-image measurements")
-        st.dataframe(sec_df.dropna(axis=1, how="all"), use_container_width=True)
-        if len(sec_df) >= 2:
-            fig = _metric_histograms(
-                sec_df, [("area_mu2", "Area (µm²)"), ("eccentricity", "Eccentricity")],
-                "Cross-Section — distribution across images",
-            )
-            if fig is not None:
-                st.pyplot(fig)
-                plt.close(fig)
-
-    if has_curv:
-        curv_df = per_image[per_image["image_type"] == "curvature"]
-        st.divider()
-        st.subheader("Curvature — per-image measurements")
-        st.dataframe(curv_df.dropna(axis=1, how="all"), use_container_width=True)
-        if len(curv_df) >= 2:
-            fig = _metric_histograms(
-                curv_df, [("curv_mean_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
-                "Curvature — distribution across images",
-            )
-            if fig is not None:
-                st.pyplot(fig)
-                plt.close(fig)
-
-    st.divider()
-    if not per_image.empty:
+    if st.session_state["sbatch_script"]:
         st.download_button(
-            "📥 Download per-image CSV",
-            data=per_image.to_csv(index=False),
-            file_name="hair_analysis_per_image.csv",
-            mime="text/csv",
+            "⬇ Download run_fibermorph.sbatch",
+            data=st.session_state["sbatch_script"],
+            file_name="run_fibermorph.sbatch",
+            mime="text/plain",
         )
+        st.code(st.session_state["sbatch_script"], language="bash")
+        st.caption(
+            "Edit the placeholders, copy this to your cluster, and run "
+            "`sbatch run_fibermorph.sbatch`. fibermorph writes a timestamped "
+            "subfolder per module under your output directory, each with a summary "
+            "CSV (`summary_section_data.csv` / `curvature_summary_data*.csv`) — one "
+            "row per image, carrying its source filename for downstream grouping."
+        )
+
