@@ -323,7 +323,7 @@ def _metric_histograms(df, metrics, suptitle):
 
 def _faceted_histograms(df, group_col, metrics, suptitle):
     """One row of histograms per group (e.g. per source image), one column per
-    metric — so each sample's distribution is on its own panelled row.
+    metric — so each sample's distribution is on its own paneled row.
 
     Each metric column shares one x-axis (and common bin edges) across all
     sample rows, so the distributions line up for at-a-glance comparison.
@@ -375,7 +375,7 @@ def _faceted_histograms(df, group_col, metrics, suptitle):
 # Constants
 # ---------------------------------------------------------------------------
 _FILENAME_NOTE = (
-    "Each result row records its **source filename**. The app analyses one image "
+    "Each result row records its **source filename**. The app analyzes one image "
     "at a time and does no grouping — name your files however you'll want to group "
     "them (within/between individual) in your own downstream analysis."
 )
@@ -385,8 +385,8 @@ _UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 # Sidebar: brand + navigation + status (replaces the top tab bar)
 # ---------------------------------------------------------------------------
 _NAV_GROUPS = [
-    ("Analyse", [("section", "🔬  Cross-Section"), ("curvature", "🌀  Curvature")]),
-    ("Run",     [("local", "💻  Run Local"), ("remote", "🖥️  Run Remote")]),
+    ("Analyze", [("section", "Cross-Section"), ("curvature", "Curvature")]),
+    ("Run",     [("local", "Run Local"), ("remote", "Run Remote")]),
 ]
 
 with st.sidebar:
@@ -440,7 +440,7 @@ if _view == "section":
         sec_sam2     = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
         sec_ckpt     = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
 
-    if st.button("▶ Analyse cross-sections", type="primary", key="sec_run"):
+    if st.button("▶ Analyze cross-sections", type="primary", key="sec_run"):
         if _source_is_empty(sec_source):
             st.error("Provide at least one cross-section image.")
         else:
@@ -638,7 +638,7 @@ elif _view == "curvature":
                  "fork and are NOT part of the published fibermorph curvature "
                  "method — treat them as experimental.")
 
-    if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
+    if st.button("▶ Analyze curvature", type="primary", key="curv_run"):
         if _source_is_empty(curv_source):
             st.error("Provide at least one curvature image.")
         else:
@@ -783,7 +783,7 @@ elif _view == "curvature":
         hist_metrics = [("length", "Fragment Length (mm)"),
                         ("curv_mean", "Fragment Mean Curvature (mm⁻¹)")]
 
-        # Per-sample: one panelled row per uploaded image (only when >1 sample).
+        # Per-sample: one paneled row per uploaded image (only when >1 sample).
         if frag_df["source_file"].nunique() >= 2:
             fig_by = _faceted_histograms(
                 frag_df, "source_file", hist_metrics, "Per-sample distributions",
@@ -859,7 +859,7 @@ elif _view == "remote":
         "HPC cluster. It builds the script only — it does not submit anything.",
     ), unsafe_allow_html=True)
     st.markdown(
-        "The **Cross-Section** and **Curvature** views analyse a few uploaded images "
+        "The **Cross-Section** and **Curvature** views analyze a few uploaded images "
         "right here in the browser. "
         "For a whole study — or images too large to upload — run the **fibermorph "
         "command-line tool** where your images already live (your workstation or an "

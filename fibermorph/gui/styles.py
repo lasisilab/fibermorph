@@ -4,7 +4,7 @@ One place for the visual identity: the injected CSS (fonts, tokens, sidebar,
 buttons, cards, table, inputs) plus small HTML-builder helpers for the sidebar
 brand lockup, per-view headers, and at-a-glance metric cards.
 
-Colours, type and spacing follow the design handoff tokens exactly. Assets
+Colors, type and spacing follow the design handoff tokens exactly. Assets
 (logo + dendritic "branch" mask) live in gui/assets/ and are embedded as base64
 data URIs so the app stays self-contained (no static-file server needed).
 """
@@ -45,10 +45,42 @@ def _data_uri(name: str) -> str:
     return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
 
 
+# Simple stroke-outline nav glyphs (from the design): an ellipse for the
+# cross-section, an arc for curvature, a laptop for local, a server for remote.
+# Used as CSS masks so the icon colour follows the nav item's text colour.
+_NAV_ICONS = {
+    "section": ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+                'fill="none" stroke="#000" stroke-width="2">'
+                '<ellipse cx="12" cy="12" rx="9" ry="6"/></svg>'),
+    "curvature": ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+                  'fill="none" stroke="#000" stroke-width="2" stroke-linecap="round">'
+                  '<path d="M3 16 A 10 8 0 0 1 21 16"/></svg>'),
+    "local": ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+              'fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" '
+              'stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/>'
+              '<path d="M2 20h20"/></svg>'),
+    "remote": ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+               'fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" '
+               'stroke-linejoin="round"><rect x="4" y="4" width="16" height="7" rx="1.5"/>'
+               '<rect x="4" y="13" width="16" height="7" rx="1.5"/>'
+               '<path d="M7.5 7.5h.01M7.5 16.5h.01"/></svg>'),
+}
+
+
+def _svg_uri(svg: str) -> str:
+    """Base64 data URI for an inline SVG (avoids URL-escaping issues in CSS)."""
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
 @lru_cache(maxsize=1)
 def css() -> str:
     """The full <style> block to inject once at app start."""
     branch = _data_uri("pattern-branches-mask.png")
+    nav_icons = "\n".join(
+        f'[data-testid="stSidebar"] .st-key-nav_{k} button::before {{'
+        f"-webkit-mask-image:url('{_svg_uri(svg)}'); mask-image:url('{_svg_uri(svg)}'); }}"
+        for k, svg in _NAV_ICONS.items()
+    )
     return f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600&family=Mulish:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600&display=swap');
@@ -64,7 +96,7 @@ html, body, [data-testid="stAppViewContainer"], .stMarkdown, p, span, div, label
   font-family:'Open Sans', sans-serif;
 }}
 [data-testid="stAppViewContainer"] {{ background:#FBFCFD; }}
-[data-testid="stMain"] .block-container {{ max-width:1180px; padding-top:2.2rem; padding-bottom:4rem; }}
+[data-testid="stMain"] .block-container {{ max-width:1180px; padding-top:3.75rem; padding-bottom:4rem; }}
 h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL_900}; }}
 
 /* ---- Sidebar shell: teal→indigo gradient, branch motif, accent rail ---- */
@@ -72,7 +104,7 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
   background:linear-gradient(160deg,{TEAL_900} 0%,{INDIGO_700} 118%);
   border-right:0;
 }}
-[data-testid="stSidebar"] > div:first-child {{ padding-top:1.6rem; position:relative; }}
+[data-testid="stSidebar"] > div:first-child {{ padding-top:2.6rem; position:relative; }}
 [data-testid="stSidebar"]::before {{
   content:""; position:absolute; top:-2%; right:-14%; width:78%; aspect-ratio:1/1;
   -webkit-mask:url('{branch}') no-repeat top right/contain;
@@ -103,6 +135,16 @@ h1, h2, h3, h4 {{ font-family:'Mulish', sans-serif; font-weight:700; color:{TEAL
   background:rgba(255,255,255,0.12); color:#fff; box-shadow:none;
 }}
 [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{ background:rgba(255,255,255,0.16); }}
+/* Nav glyphs: stroke SVG as a mask, tinted to the item's text colour. */
+[data-testid="stSidebar"] .stButton > button::before {{
+  content:""; display:inline-block; width:17px; height:17px; margin-right:11px; flex:none;
+  background-color:currentColor; vertical-align:middle;
+  -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+  -webkit-mask-position:center; mask-position:center;
+  -webkit-mask-size:contain; mask-size:contain;
+}}
+[data-testid="stSidebar"] .stButton > button[kind="primary"]::before {{ background-color:{TEAL_400}; }}
+{nav_icons}
 [data-testid="stSidebar"] .nav-eyebrow {{
   font-family:'Plus Jakarta Sans', sans-serif; font-size:10.5px; font-weight:600;
   letter-spacing:0.2em; text-transform:uppercase; color:rgba(255,255,255,0.45);
