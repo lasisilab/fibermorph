@@ -58,9 +58,10 @@ for _key, _default in [
     ("job_submitted",   False),
     ("sbatch_script",   ""),
     ("output_dir",      ""),
-    ("results_loaded",  False),
-    ("quick_results",   None),
-    ("seg_store",       {}),
+    ("results_loaded",    False),
+    ("section_results",   None),
+    ("curvature_results", None),
+    ("seg_store",         {}),
 ]:
     if _key not in st.session_state:
         st.session_state[_key] = _default
@@ -209,110 +210,82 @@ def _metric_histograms(df, metrics, suptitle):
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_quick, tab_seg, tab_upload, tab_submit, tab_results = st.tabs(
-    ["🧪 Quick Test", "🔍 Segmentation", "📁 Batch (Cluster)", "🚀 Submit & Monitor", "📊 Results"]
+tab_sec, tab_curv, tab_upload, tab_submit, tab_results = st.tabs(
+    ["🔬 Cross-Section", "🌀 Curvature", "📁 Batch (Cluster)", "🚀 Submit & Monitor", "📊 Results"]
 )
+
+_FILENAME_NOTE = (
+    "Each result row records its **source filename**. The app analyses one image "
+    "at a time and does no grouping — name your files however you'll want to group "
+    "them (within/between individual) in your own downstream analysis."
+)
+_UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 
 
 # ============================================================
 # TAB 1 — Quick Test (file upload + in-process run)
 # ============================================================
-with tab_quick:
-    st.header("Quick Test — Upload & Analyse")
+with tab_sec:
+    st.header("Cross-Section Analysis")
     st.info(
-        "Upload up to ~20 images directly from your computer. "
-        "Analysis runs immediately on this server (no SBATCH). "
-        "For large batches use the **Batch (Cluster)** tab."
+        "Upload cross-section images to segment and measure them immediately on "
+        "this server. For large batches use the **Batch (Cluster)** tab."
     )
-    st.caption(
-        "Each result row records its **source filename**. The app analyses one "
-        "image at a time and does no grouping — name your files however you'll "
-        "want to group them (within/between individual) in your own downstream "
-        "analysis."
-    )
+    st.caption(_FILENAME_NOTE)
 
-    col_sec, col_curv = st.columns(2)
-    with col_sec:
-        st.subheader("Cross-Section Images")
-        sec_uploads = st.file_uploader(
-            "Upload images (TIFF, PNG, JPG)", type=["tif", "tiff", "png", "jpg", "jpeg"],
-            accept_multiple_files=True, key="sec_uploads",
-        )
-    with col_curv:
-        st.subheader("Curvature Images")
-        curv_uploads = st.file_uploader(
-            "Upload images (TIFF, PNG, JPG)", type=["tif", "tiff", "png", "jpg", "jpeg"],
-            accept_multiple_files=True, key="curv_uploads",
-        )
+    sec_uploads = st.file_uploader(
+        "Upload cross-section images (TIFF, PNG, JPG)", type=_UPLOAD_TYPES,
+        accept_multiple_files=True, key="sec_uploads",
+    )
 
     with st.expander("Settings", expanded=False):
         c1, c2, c3 = st.columns(3)
-        qt_res_mu = c1.number_input(
-            "Section resolution (px/µm)", value=4.25, step=0.01, key="qt_res_mu",
+        sec_res_mu = c1.number_input(
+            "Resolution (px/µm)", value=4.25, step=0.01, key="sec_res_mu",
             help="Pixels per µm. If your scale is in µm/pixel, enter its reciprocal "
                  "(e.g. 0.18 µm/pixel → 1/0.18 ≈ 5.556).")
-        qt_min_d  = c2.number_input("Min diameter (µm)",            value=30.0,  step=1.0,  key="qt_min_d")
-        qt_max_d  = c3.number_input("Max diameter (µm)",            value=150.0, step=1.0,  key="qt_max_d")
-        qt_res_mm = c1.number_input("Curvature resolution (px/mm)", value=132.0, step=1.0,  key="qt_res_mm")
-        qt_window = c2.number_input("Taubin window (px)",           value=50,    step=5,    key="qt_window")
-        qt_clahe  = c3.toggle("CLAHE preprocessing (curvature)",    value=False,            key="qt_clahe")
-        qt_sam2   = st.toggle("Use SAM2 segmentation (GPU required)", value=False,           key="qt_sam2")
-        qt_ckpt   = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT,         key="qt_ckpt")
+        sec_min_d  = c2.number_input("Min diameter (µm)", value=30.0,  step=1.0, key="sec_min_d")
+        sec_max_d  = c3.number_input("Max diameter (µm)", value=150.0, step=1.0, key="sec_max_d")
+        sec_sam2   = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
+        sec_ckpt   = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
 
-    if st.button("▶ Run Analysis", type="primary", key="qt_run"):
-        if not sec_uploads and not curv_uploads:
-            st.error("Upload at least one image.")
+    if st.button("▶ Analyse cross-sections", type="primary", key="sec_run"):
+        if not sec_uploads:
+            st.error("Upload at least one cross-section image.")
         else:
             rows            = []
             seg_store       = {}
             failed_sections = []
-            total           = len(sec_uploads) + len(curv_uploads)
             progress        = st.progress(0, text="Processing…")
 
             with tempfile.TemporaryDirectory() as tmpdir:
-                all_items = (
-                    [(f, "section")   for f in sec_uploads] +
-                    [(f, "curvature") for f in curv_uploads]
-                )
-                for idx, (uploaded, img_type) in enumerate(all_items):
-                    progress.progress(idx / total, text=f"Processing {uploaded.name}…")
+                for idx, uploaded in enumerate(sec_uploads):
+                    progress.progress(idx / len(sec_uploads),
+                                      text=f"Processing {uploaded.name}…")
                     tmp_path = os.path.join(tmpdir, uploaded.name)
                     with open(tmp_path, "wb") as fh:
                         fh.write(uploaded.read())
                     try:
-                        if img_type == "section":
-                            out = _process_section_gui(
-                                tmp_path,
-                                resolution_mu=float(qt_res_mu),
-                                min_diam=float(qt_min_d),
-                                max_diam=float(qt_max_d),
-                                use_sam2=bool(qt_sam2),
-                                sam2_checkpoint=str(qt_ckpt),
-                                return_mask=True,
-                            )
-                            if out is not None:
-                                result, gray_img, mask_img = out
-                                seg_store[uploaded.name] = (gray_img, mask_img)
-                            else:
-                                result = None
-                        else:
-                            result = _process_curvature_gui(
-                                tmp_path,
-                                resolution_mm=float(qt_res_mm),
-                                window_size=int(qt_window),
-                                use_clahe=bool(qt_clahe),
-                            )
+                        out = _process_section_gui(
+                            tmp_path,
+                            resolution_mu=float(sec_res_mu),
+                            min_diam=float(sec_min_d),
+                            max_diam=float(sec_max_d),
+                            use_sam2=bool(sec_sam2),
+                            sam2_checkpoint=str(sec_ckpt),
+                            return_mask=True,
+                        )
                     except Exception as e:
                         st.warning(f"{uploaded.name}: {e}")
-                        result = None
+                        out = None
 
-                    if result is not None:
-                        # One per-image row, tagged with its source filename.
-                        row = {"image_type": img_type, "source_file": uploaded.name}
-                        if isinstance(result, dict):
-                            row.update(result)
+                    if out is not None:
+                        result, gray_img, mask_img = out
+                        seg_store[uploaded.name] = (gray_img, mask_img)
+                        row = {"image_type": "section", "source_file": uploaded.name}
+                        row.update(result)
                         rows.append(row)
-                    elif img_type == "section":
+                    else:
                         failed_sections.append(uploaded.name)
 
                 progress.progress(1.0, text="Done.")
@@ -322,166 +295,200 @@ with tab_quick:
                     "No cross-section was detected in: "
                     + ", ".join(failed_sections)
                     + ".  If a cross-section is clearly present, the most common cause is the "
-                    "**Section resolution** — it must be in **pixels per µm** (e.g. enter "
-                    "**5.556** for a 0.18 µm/pixel scale), not µm/pixel. Also check the "
-                    "min/max diameter range."
+                    "**Resolution** — it must be in **pixels per µm** (e.g. enter **5.556** "
+                    "for a 0.18 µm/pixel scale), not µm/pixel. Also check the min/max "
+                    "diameter range."
                 )
 
             if not rows:
-                st.error("No images were processed successfully.")
+                st.error("No cross-sections were measured.")
             else:
-                df = pd.DataFrame(rows)
-                st.session_state["quick_results"] = df
-                st.session_state["seg_store"]     = seg_store
-                st.success(
-                    f"Processed {len(df)} / {total} images. "
-                    "Check the **Segmentation** tab to review masks."
-                )
+                st.session_state["section_results"] = pd.DataFrame(rows)
+                st.session_state["seg_store"]       = seg_store
+                st.success(f"Measured {len(rows)} / {len(sec_uploads)} cross-section(s).")
 
-    # ---- Display results ----
-    if st.session_state["quick_results"] is not None:
+    # ---- Cross-section results ----
+    sec_df = st.session_state.get("section_results")
+    if sec_df is not None and not sec_df.empty:
         import matplotlib.pyplot as plt
 
-        df       = st.session_state["quick_results"]
-        has_sec  = "image_type" in df.columns and (df["image_type"] == "section").any()
-        has_curv = "image_type" in df.columns and (df["image_type"] == "curvature").any()
-
         st.divider()
-        st.metric("Images processed", len(df))
+        st.metric("Cross-sections measured", len(sec_df))
 
-        if has_sec:
-            sec_df   = df[df["image_type"] == "section"]
-            sec_cols = {
-                "source_file":         "File",
-                "area_mu2":            "Area (µm²)",
-                "circularity":         "Circularity",
-                "aspect_ratio":        "Aspect Ratio",
-                "eccentricity":        "Eccentricity",
-                "solidity":            "Solidity",
-                "segmentation_method": "Method",
-            }
-            present = {k: v for k, v in sec_cols.items() if k in sec_df.columns}
-            st.markdown("**Cross-Section — Key Measurements**")
-            st.dataframe(
-                sec_df[list(present.keys())].rename(columns=present).style.format({
-                    "Area (µm²)":   "{:.0f}",
-                    "Circularity":  "{:.3f}",
-                    "Aspect Ratio": "{:.2f}",
-                    "Eccentricity": "{:.3f}",
-                    "Solidity":     "{:.3f}",
-                }),
-                use_container_width=True,
+        sec_cols = {
+            "source_file":         "File",
+            "area_mu2":            "Area (µm²)",
+            "circularity":         "Circularity",
+            "aspect_ratio":        "Aspect Ratio",
+            "eccentricity":        "Eccentricity",
+            "solidity":            "Solidity",
+            "segmentation_method": "Method",
+        }
+        present = {k: v for k, v in sec_cols.items() if k in sec_df.columns}
+        st.markdown("**Key Measurements**")
+        st.dataframe(
+            sec_df[list(present.keys())].rename(columns=present).style.format({
+                "Area (µm²)":   "{:.0f}",
+                "Circularity":  "{:.3f}",
+                "Aspect Ratio": "{:.2f}",
+                "Eccentricity": "{:.3f}",
+                "Solidity":     "{:.3f}",
+            }),
+            use_container_width=True,
+        )
+
+        if len(sec_df) >= 2:
+            fig = _metric_histograms(
+                sec_df,
+                [("area_mu2", "Area (µm²)"), ("eccentricity", "Eccentricity")],
+                "Distribution across uploaded images",
             )
+            if fig is not None:
+                st.pyplot(fig)
+                plt.close(fig)
+        else:
+            st.info("Upload 2 or more cross-section images to see a distribution. "
+                    "The per-image measurements are in the table above and the CSV.")
 
-        if has_curv:
-            curv_df   = df[df["image_type"] == "curvature"]
-            curv_cols = {
-                "source_file":       "File",
-                "curv_mean":         "Mean Curv (mm⁻¹)",
-                "curv_median":       "Median Curv (mm⁻¹)",
-                "curl_index":        "Curl Index",
-                "wave_count":        "Wave Count",
-                "wave_count_per_mm": "Waves / mm",
-                "hair_count":        "Fiber Count",
-                "length_total":      "Total Length (mm)",
-                "diameter_mean_mu":  "Fiber Diam (µm)",
-            }
-            present = {k: v for k, v in curv_cols.items() if k in curv_df.columns}
-            st.markdown("**Curvature — Key Measurements**")
-            st.dataframe(
-                curv_df[list(present.keys())].rename(columns=present).style.format(
-                    {c: "{:.3f}" for c in list(present.values())[1:]}
-                ),
-                use_container_width=True,
-            )
-
-        # One simple, ungrouped distribution per image type — shown only with
-        # 2+ images. This is image analysis, not data analysis: grouped stats
-        # (within/between individual) belong in your own downstream tools using
-        # the per-image CSV.
-        if has_sec:
-            if len(sec_df) >= 2:
-                fig = _metric_histograms(
-                    sec_df,
-                    [("area_mu2", "Area (µm²)"), ("eccentricity", "Eccentricity")],
-                    "Cross-Section — distribution across uploaded images",
-                )
-                if fig is not None:
-                    st.pyplot(fig)
-                    plt.close(fig)
-            else:
-                st.info("Upload 2 or more cross-section images to see a distribution. "
-                        "The per-image measurements are in the table above and the CSV.")
-
-        if has_curv:
-            if len(curv_df) >= 2:
-                fig = _metric_histograms(
-                    curv_df,
-                    [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
-                    "Curvature — distribution across uploaded images",
-                )
-                if fig is not None:
-                    st.pyplot(fig)
-                    plt.close(fig)
-            else:
-                st.info("Upload 2 or more curvature images to see a distribution. "
-                        "The per-image measurements are in the table above and the CSV.")
-
-        st.divider()
         st.download_button(
-            "📥 Download CSV",
-            data=df.to_csv(index=False),
-            file_name="quick_test_results.csv",
+            "📥 Download cross-section CSV",
+            data=sec_df.to_csv(index=False),
+            file_name="section_results.csv",
             mime="text/csv",
         )
 
+        # Segmentation mask preview for this run
+        seg_store = st.session_state.get("seg_store", {})
+        if seg_store:
+            with st.expander(f"Segmentation masks ({len(seg_store)})", expanded=False):
+                import numpy as _np
+
+                def _to_u8(arr):
+                    a = arr.astype(float)
+                    lo, hi = a.min(), a.max()
+                    if hi > lo:
+                        a = (a - lo) / (hi - lo) * 255
+                    return a.astype("uint8")
+
+                for fname, (gray, mask) in seg_store.items():
+                    st.markdown(f"**{fname}**")
+                    col_img, col_mask, col_overlay = st.columns(3)
+                    gray_u8 = _to_u8(gray)
+                    mask_u8 = (mask > 0).astype("uint8") * 255
+                    rgb      = _np.stack([gray_u8, gray_u8, gray_u8], axis=-1)
+                    green_ch = rgb[:, :, 1].copy()
+                    green_ch[mask_u8 > 0] = _np.clip(
+                        green_ch[mask_u8 > 0].astype(int) + 80, 0, 255
+                    ).astype("uint8")
+                    rgb[:, :, 1] = green_ch
+                    col_img.image(gray_u8,  caption="Input",   use_container_width=True, clamp=True)
+                    col_mask.image(mask_u8, caption="Mask",    use_container_width=True, clamp=True)
+                    col_overlay.image(rgb,  caption="Overlay", use_container_width=True, clamp=True)
+
 
 # ============================================================
-# TAB 2 — Segmentation Preview
+# TAB 2 — Curvature
 # ============================================================
-with tab_seg:
-    st.header("Segmentation Preview")
-    st.caption(
-        "Input images side-by-side with the detected hair mask. "
-        "Run **Quick Test** first to populate this view."
+with tab_curv:
+    st.header("Curvature Analysis")
+    st.info(
+        "Upload curvature images to measure them immediately on this server. "
+        "For large batches use the **Batch (Cluster)** tab."
+    )
+    st.caption(_FILENAME_NOTE)
+
+    curv_uploads = st.file_uploader(
+        "Upload curvature images (TIFF, PNG, JPG)", type=_UPLOAD_TYPES,
+        accept_multiple_files=True, key="curv_uploads",
     )
 
-    seg_store = st.session_state.get("seg_store", {})
-    if not seg_store:
-        st.info(
-            "No segmentation results yet — upload images in the Quick Test tab "
-            "and click Run Analysis."
+    with st.expander("Settings", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        curv_res_mm = c1.number_input("Resolution (px/mm)", value=132.0, step=1.0, key="curv_res_mm")
+        curv_window = c2.number_input("Taubin window (px)", value=50,    step=5,   key="curv_window")
+        curv_clahe  = c3.toggle("CLAHE preprocessing",      value=False,           key="curv_clahe")
+
+    if st.button("▶ Analyse curvature", type="primary", key="curv_run"):
+        if not curv_uploads:
+            st.error("Upload at least one curvature image.")
+        else:
+            rows     = []
+            progress = st.progress(0, text="Processing…")
+            with tempfile.TemporaryDirectory() as tmpdir:
+                for idx, uploaded in enumerate(curv_uploads):
+                    progress.progress(idx / len(curv_uploads),
+                                      text=f"Processing {uploaded.name}…")
+                    tmp_path = os.path.join(tmpdir, uploaded.name)
+                    with open(tmp_path, "wb") as fh:
+                        fh.write(uploaded.read())
+                    try:
+                        result = _process_curvature_gui(
+                            tmp_path,
+                            resolution_mm=float(curv_res_mm),
+                            window_size=int(curv_window),
+                            use_clahe=bool(curv_clahe),
+                        )
+                    except Exception as e:
+                        st.warning(f"{uploaded.name}: {e}")
+                        result = None
+                    if result is not None:
+                        row = {"image_type": "curvature", "source_file": uploaded.name}
+                        row.update(result)
+                        rows.append(row)
+                progress.progress(1.0, text="Done.")
+
+            if not rows:
+                st.error("No curvature images were measured.")
+            else:
+                st.session_state["curvature_results"] = pd.DataFrame(rows)
+                st.success(f"Measured {len(rows)} / {len(curv_uploads)} image(s).")
+
+    curv_df = st.session_state.get("curvature_results")
+    if curv_df is not None and not curv_df.empty:
+        import matplotlib.pyplot as plt
+
+        st.divider()
+        st.metric("Curvature images measured", len(curv_df))
+
+        curv_cols = {
+            "source_file":       "File",
+            "curv_mean":         "Mean Curv (mm⁻¹)",
+            "curv_median":       "Median Curv (mm⁻¹)",
+            "curl_index":        "Curl Index",
+            "wave_count":        "Wave Count",
+            "wave_count_per_mm": "Waves / mm",
+            "hair_count":        "Fiber Count",
+            "length_total":      "Total Length (mm)",
+            "diameter_mean_mu":  "Fiber Diam (µm)",
+        }
+        present = {k: v for k, v in curv_cols.items() if k in curv_df.columns}
+        st.markdown("**Key Measurements**")
+        st.dataframe(
+            curv_df[list(present.keys())].rename(columns=present).style.format(
+                {c: "{:.3f}" for c in list(present.values())[1:]}
+            ),
+            use_container_width=True,
         )
-    else:
-        import numpy as _np
 
-        st.write(f"Showing {len(seg_store)} cross-section image(s).")
+        if len(curv_df) >= 2:
+            fig = _metric_histograms(
+                curv_df,
+                [("curv_mean", "Mean Curvature (mm⁻¹)"), ("curl_index", "Curl Index")],
+                "Distribution across uploaded images",
+            )
+            if fig is not None:
+                st.pyplot(fig)
+                plt.close(fig)
+        else:
+            st.info("Upload 2 or more curvature images to see a distribution. "
+                    "The per-image measurements are in the table above and the CSV.")
 
-        for fname, (gray, mask) in seg_store.items():
-            st.markdown(f"**{fname}**")
-            col_img, col_mask, col_overlay = st.columns(3)
-
-            def _to_u8(arr):
-                a  = arr.astype(float)
-                lo, hi = a.min(), a.max()
-                if hi > lo:
-                    a = (a - lo) / (hi - lo) * 255
-                return a.astype("uint8")
-
-            gray_u8 = _to_u8(gray)
-            mask_u8 = (mask > 0).astype("uint8") * 255
-
-            rgb      = _np.stack([gray_u8, gray_u8, gray_u8], axis=-1)
-            green_ch = rgb[:, :, 1].copy()
-            green_ch[mask_u8 > 0] = _np.clip(
-                green_ch[mask_u8 > 0].astype(int) + 80, 0, 255
-            ).astype("uint8")
-            rgb[:, :, 1] = green_ch
-
-            col_img.image(gray_u8,  caption="Input",   use_container_width=True, clamp=True)
-            col_mask.image(mask_u8, caption="Mask",    use_container_width=True, clamp=True)
-            col_overlay.image(rgb,  caption="Overlay", use_container_width=True, clamp=True)
-            st.divider()
+        st.download_button(
+            "📥 Download curvature CSV",
+            data=curv_df.to_csv(index=False),
+            file_name="curvature_results.csv",
+            mime="text/csv",
+        )
 
 
 # ============================================================
