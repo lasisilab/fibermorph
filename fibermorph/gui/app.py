@@ -160,7 +160,7 @@ def _process_curvature_gui(
 
     Returns a dict {"fragments": DataFrame|None, "image_row": dict} or None.
 
-    The pipeline detects each connected fibre fragment, measures its length and
+    The pipeline detects each connected fiber fragment, measures its length and
     curvature, and writes that per-fragment table to analysis/ImageSum_<name>.csv
     (columns curv_mean, curv_median, length — one row per fragment). We read that
     back before the temp dir is removed so the GUI can show per-fragment results,
@@ -313,6 +313,41 @@ def _metric_histograms(df, metrics, suptitle):
         ax.hist(vals, bins="auto", color="#4C72B0", edgecolor="white")
         ax.set_xlabel(label)
         ax.set_ylabel("Count")
+    fig.suptitle(suptitle, fontsize=12, fontweight="bold")
+    fig.tight_layout()
+    return fig
+
+
+def _faceted_histograms(df, group_col, metrics, suptitle):
+    """One row of histograms per group (e.g. per source image), one column per
+    metric — so each sample's distribution is on its own panelled row.
+
+    Returns a matplotlib Figure, or None if nothing is plottable.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    groups = list(dict.fromkeys(df[group_col].tolist()))  # unique, order-preserving
+    cols = [(c, label) for c, label in metrics if c in df.columns]
+    if not groups or not cols:
+        return None
+
+    nrows, ncols = len(groups), len(cols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 2.6 * nrows),
+                             squeeze=False)
+    for r, g in enumerate(groups):
+        sub = df[df[group_col] == g]
+        for c, (col, label) in enumerate(cols):
+            ax = axes[r][c]
+            vals = sub[col].replace([np.inf, -np.inf], np.nan).dropna()
+            if len(vals) >= 1:
+                ax.hist(vals, bins="auto", color="#4C72B0", edgecolor="white")
+            if r == 0:
+                ax.set_title(label, fontsize=10)
+            if c == 0:
+                ax.set_ylabel(str(g), fontsize=9)
+            if r == nrows - 1:
+                ax.set_xlabel(label)
     fig.suptitle(suptitle, fontsize=12, fontweight="bold")
     fig.tight_layout()
     return fig
@@ -593,8 +628,8 @@ with tab_curv:
 
             if failed:
                 st.warning(
-                    "No fibre fragments were measured in: " + ", ".join(failed)
-                    + ". Check the **Resolution** (px/mm) and that the fibres are "
+                    "No fiber fragments were measured in: " + ", ".join(failed)
+                    + ". Check the **Resolution** (px/mm) and that the fibers are "
                     "visible against the background."
                 )
             if not frag_frames:
@@ -620,7 +655,7 @@ with tab_curv:
         m2.metric("Images", frag_df["source_file"].nunique())
 
         # --- Per-fragment table (primary output) ---
-        st.markdown("**Per-fragment measurements** — one row per fibre fragment")
+        st.markdown("**Per-fragment measurements** — one row per fiber fragment")
         frag_cols = {
             "source_file": "File",
             "fragment":    "Fragment",
@@ -673,13 +708,24 @@ with tab_curv:
                 mime="text/csv",
             )
 
-        # --- Distribution across fragments ---
+        # --- Distributions of fragment length + mean curvature ---
+        hist_metrics = [("length", "Fragment Length (mm)"),
+                        ("curv_mean", "Fragment Mean Curvature (mm⁻¹)")]
+
+        # Per-sample: one panelled row per uploaded image (only when >1 sample).
+        if frag_df["source_file"].nunique() >= 2:
+            fig_by = _faceted_histograms(
+                frag_df, "source_file", hist_metrics, "Per-sample distributions",
+            )
+            if fig_by is not None:
+                st.pyplot(fig_by)
+                plt.close(fig_by)
+
+        # Joint: all fragments from all samples pooled together.
         if len(frag_df) >= 2:
             fig = _metric_histograms(
-                frag_df,
-                [("length", "Fragment Length (mm)"),
-                 ("curv_mean", "Fragment Mean Curvature (mm⁻¹)")],
-                "Distribution across fragments",
+                frag_df, hist_metrics,
+                "Joint distribution — all samples pooled",
             )
             if fig is not None:
                 st.pyplot(fig)
