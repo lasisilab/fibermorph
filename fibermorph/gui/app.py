@@ -224,8 +224,6 @@ with tab_quick:
         if not sec_uploads and not curv_uploads:
             st.error("Upload at least one image.")
         else:
-            from fibermorph.utils.metadata import parse_metadata
-
             rows            = []
             seg_store       = {}
             failed_sections = []
@@ -270,9 +268,10 @@ with tab_quick:
                         result = None
 
                     if result is not None:
-                        meta = parse_metadata(uploaded.name)
-                        row  = {"image_type": img_type, "source_file": uploaded.name}
-                        row.update(meta)
+                        # No filename-based grouping: emit one row of per-image
+                        # measurements. Group within/between individual downstream
+                        # from the CSV — the app makes no assumptions about names.
+                        row = {"image_type": img_type, "source_file": uploaded.name}
                         if isinstance(result, dict):
                             row.update(result)
                         rows.append(row)
@@ -360,19 +359,38 @@ with tab_quick:
                 use_container_width=True,
             )
 
+        # Distribution figures summarise across images, so they need 2+ of a type.
+        # The grouping-dependent figures (Comparison / Variability) are skipped —
+        # the app no longer parses filenames into individual/sample groups.
+        _skip_groups = {"Comparison", "Variability"}
+
         if has_sec:
-            st.markdown("**Cross-Section Figures**")
-            for group, title, fig in section_figures(df):
-                with st.expander(title, expanded=False):
-                    st.pyplot(fig)
+            if len(sec_df) >= 2:
+                st.markdown("**Cross-Section Figures** — distributions across the uploaded images")
+                for group, title, fig in section_figures(df):
+                    if group in _skip_groups:
+                        plt.close(fig)
+                        continue
+                    with st.expander(title, expanded=False):
+                        st.pyplot(fig)
                     plt.close(fig)
+            else:
+                st.info("Upload 2 or more cross-section images to see distribution figures. "
+                        "The single-image measurements are in the table above and the CSV.")
 
         if has_curv:
-            st.markdown("**Curvature Figures**")
-            for group, title, fig in curvature_figures(df):
-                with st.expander(title, expanded=False):
-                    st.pyplot(fig)
+            if len(curv_df) >= 2:
+                st.markdown("**Curvature Figures** — distributions across the uploaded images")
+                for group, title, fig in curvature_figures(df):
+                    if group in _skip_groups:
+                        plt.close(fig)
+                        continue
+                    with st.expander(title, expanded=False):
+                        st.pyplot(fig)
                     plt.close(fig)
+            else:
+                st.info("Upload 2 or more curvature images to see distribution figures. "
+                        "The single-image measurements are in the table above and the CSV.")
 
         st.divider()
         st.download_button(
