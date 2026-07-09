@@ -132,3 +132,6 @@ __pycache__
 coverage.xml
 .htmlcov/
 *.coverfibermorph/fibermorph_old.py
+
+# Claude Code local config (launch.json, settings, etc.)
+.claude/
