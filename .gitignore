@@ -133,3 +133,7 @@ coverage.xml
 .htmlcov/
 *.coverfibermorph/fibermorph_old.py
 /.claude
+
+# Large test images live in tinalasisi/fibermorph_DemoData and are fetched on demand
+*.tif
+*.tiff
