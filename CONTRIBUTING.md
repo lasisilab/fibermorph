@@ -38,6 +38,13 @@ fibermorph-gui               # launch the GUI locally
   `chore:`, `ci:`, etc. Example: `feat: validate wave-count on synthetic fibers`.
 - Make sure `pytest` passes before requesting review.
 
+## Test data
+
+Don't commit large images to this repo. Large/real test images live in the
+separate [`tinalasisi/fibermorph_DemoData`](https://github.com/tinalasisi/fibermorph_DemoData)
+repo and are fetched on demand (see `fibermorph/demo/demo.py`); unit tests
+generate small synthetic images at runtime. `*.tif`/`*.tiff` are git-ignored.
+
 ## Releases (maintainers)
 
 Bump `version` in `pyproject.toml`, commit, then tag:
