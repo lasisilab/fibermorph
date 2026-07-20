@@ -1,0 +1,42 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Fibermorph — Hair Cross-Section Morphology"
+  description: "Automated SAM2-guided segmentation and shape analysis of hair fiber cross-sections"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Overview
+      - href: methods.qmd
+        text: Methods
+      - text: Analysis
+        menu:
+          - text: "00 · Pipeline Overview"
+            href: analysis/00_pipeline_overview.ipynb
+          - text: "01 · Shape Features"
+            href: analysis/01_shape_features.ipynb
+          - text: "02 · PCA Morphospace"
+            href: analysis/02_pca_morphospace.ipynb
+          - text: "03 · Outlier Analysis"
+            href: analysis/03_outlier_analysis.ipynb
+          - text: "04 · Mirror Validation"
+            href: analysis/04_mirror_validation.ipynb
+          - text: "05 · Shape Classification"
+            href: analysis/05_shape_classification.ipynb
+    right:
+      - icon: github
+        href: https://github.com/lasisilab/fibermorph
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: true
+    code-tools: true
+    df-print: paged
+
+execute:
+  freeze: auto
+  cache: true

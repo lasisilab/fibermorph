@@ -1,0 +1,70 @@
+---
+title: "Methods"
+---
+
+## Imaging and data collection
+
+Hair fiber cross-sections were imaged by polarised-light microscopy at **4.25 pixels per µm** (calibrated from a stage micrometer). Each individual contributed two scalp-location replicates: Region A and Region B (mirror locations on the scalp). TIFF images were exported at full bit-depth and transferred to a high-performance computing cluster for processing.
+
+## SAM2 guided segmentation
+
+Masks were produced using **SAM2 (Segment Anything Model 2, Hiera-Small checkpoint)** via a few-shot prototype-guided approach rather than exhaustive automatic mask generation.
+
+### Prototype construction
+
+For each manually verified reference pair (TIFF image + binary mask), the SAM2 image encoder (ViT-based, feature map resolution 64 × 64 for 1024-pixel inputs) was applied and the per-location feature vectors within the mask region were pooled to produce a single prototype vector $\mathbf{p} \in \mathbb{R}^{256}$. Prototypes from all reference pairs were averaged:
+
+$$\mathbf{p} = \frac{1}{N_{\text{ref}}} \sum_{i=1}^{N_{\text{ref}}} \frac{1}{|\mathcal{M}_i|} \sum_{(r,c) \in \mathcal{M}_i} \mathbf{f}_i(r,c)$$
+
+### Prompt generation
+
+For each test image, cosine similarity between $\mathbf{p}$ and every spatial location in the feature map was computed. The **top-3 highest-similarity locations** became positive point prompts; the **lowest-similarity location** became a negative (background) prompt. These 4 prompts were passed to `SAM2ImagePredictor.predict()` with `multimask_output=True`, yielding 3 candidate masks.
+
+### Candidate selection
+
+Candidates were first filtered to those whose major axis length fell within the accepted diameter range (30–150 µm). Retained candidates were ranked by:
+
+$$\text{score} = 0.40 \times \text{IoU}_{\text{confidence}} + 0.35 \times \text{solidity} + 0.25 \times \text{centrality}$$
+
+where:
+
+- **IoU confidence** is the SAM2-predicted intersection-over-union score (0–1).
+- **Solidity** is the mask area divided by its convex-hull area — penalises merged objects with concave waists.
+- **Centrality** is defined as:
+
+$$\text{centrality} = 1 - \frac{d(\text{centroid},\, \text{image centre})}{d_{\max}}$$
+
+The candidate with the highest composite score was retained as the final mask. Images for which no candidate passed the diameter filter were recorded as "no mask detected" and excluded from downstream analysis.
+
+## Shape feature extraction
+
+Each retained binary mask was characterised by 82 shape descriptors spanning four families:
+
+| Family | Count | Features |
+|---|---|---|
+| Geometric | 8 | area, perimeter, circularity, solidity, convexity, aspect ratio, eccentricity, orientation |
+| Radial profile | 7 | mean, SD, min, max, CV of boundary radii; peak count; asymmetry index |
+| Hu moments | 7 | hu1–hu7 (scale/rotation invariant) |
+| EFD coefficients | 40 | $a_n, b_n, c_n, d_n$ for harmonics 1–10 |
+| EFD power | 10 | harmonic-wise power $P_n = a_n^2 + b_n^2 + c_n^2 + d_n^2$ |
+| EFD summary | 1 | mean absolute deviation from EFD reconstruction |
+
+All physical measurements are reported in µm (area in µm²) using the calibrated resolution.
+
+### Elliptic Fourier Descriptors
+
+The boundary contour of each mask was parameterised in arc length and decomposed into 10 harmonic components via the Elliptic Fourier Decomposition. The first 3 harmonics account for a cumulative 96.4% of total harmonic power across the retained mask set, with H1 alone capturing 89% — consistent with the predominantly elliptical cross-sectional shape of hair fibers.
+
+## Outlier detection
+
+Principal components analysis was applied to a 21-variable subset (3 size, 13 shape/profile, 8 EFD harmonics H1–H8) after standardisation with `StandardScaler`. Mahalanobis distance in the PC1–PC2 subspace was computed for each mask. Samples exceeding the mean + 3 SD threshold were flagged as outliers (29/1,737 = 1.7%).
+
+## Mirror pair validation
+
+For each individual, the Region A and Region B masks were matched as a "mirror pair." The Euclidean distance between the pair in PC1–PC2 space was compared to the mean distance from that same individual's samples to all non-pair samples. A **compression ratio** of 0.437 was observed (mirror pairs are on average 2.3× closer than a random pair), confirming that the expanded EFD-based feature space captures biologically reproducible variation.
+
+Pairs with `pair_distance / mean_non_pair_distance > 1.0` (mirrors farther apart than a random pair) were flagged for re-processing with EFD-smoothed masks (79 pairs, 9.5%).
+
+## Shape classification
+
+Masks were assigned to one of 7 classes by a deterministic rule tree applied in priority order: Multi-polar → Triangular → Flattened → Irregular → Tear-drop → Circular → Elliptical. The fallback class is Irregular. Rules are based on thresholds on circularity, aspect ratio, eccentricity, solidity, and the number of radial boundary peaks.

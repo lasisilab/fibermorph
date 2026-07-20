@@ -52,4 +52,5 @@ build-frontend = "build"
 raw  = ["rawpy"]
 viz  = ["matplotlib", "seaborn"]
 gui  = ["streamlit", "matplotlib", "seaborn"]
-sam2 = []   # install separately: pip install git+https://github.com/facebookresearch/segment-anything-2
+sam2     = []   # install separately: pip install git+https://github.com/facebookresearch/segment-anything-2
+analysis = ["matplotlib", "seaborn", "scikit-learn"]  # pip install "fibermorph[analysis]" + pip install notebook jupyterlab scipy

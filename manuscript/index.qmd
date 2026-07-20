@@ -1,0 +1,48 @@
+---
+title: "Fibermorph: Automated Hair Cross-Section Morphology"
+subtitle: "SAM2-guided segmentation · Elliptic Fourier Descriptors · 82-feature morphospace"
+---
+
+## Overview
+
+Fibermorph is a fully automated pipeline for measuring the shape of hair fiber cross-sections from microscopy images. This site documents the analysis and results for a dataset of **1,737 retained masks** produced from a collection of scalp-location paired images (Region A and Region B per individual).
+
+### Key results
+
+| Metric | Value |
+|---|---|
+| Total images (valid transfer) | 1,741 |
+| Masks retained | 1,737 (99.8%) |
+| Shape classes | 7 (rule-based taxonomy) |
+| PC1 variance explained | ~43–46% |
+| Mirror compression ratio | 0.437 (2.3× closer than random) |
+| Outliers (Mahalanobis > mean+3SD) | 29 / 1,737 (1.7%) |
+
+### Pipeline summary
+
+1. **SAM2 guided segmentation** — few-shot prototype built from manually verified reference pairs; cosine-similarity map drives point prompts; best candidate selected by composite score (see [Methods](methods.qmd)).
+2. **Shape feature extraction** — 82 features per mask: geometric (8), radial profile (7), Hu moments (7), EFD coefficients (40), EFD power spectrum (10) + deviation.
+3. **Outlier detection** — Mahalanobis distance in PC1–PC2 space; threshold = mean + 3 SD.
+4. **Mirror validation** — A/B region pairs compared in morphospace to verify biological signal reproducibility.
+
+### Data
+
+All analysis-ready CSVs are in [`data/`](data/) and can be downloaded directly:
+
+- [`shape_analysis_results.csv`](data/shape_analysis_results.csv) — 1,737 × 82, primary results
+- [`shape_summary.csv`](data/shape_summary.csv) — per-class summary (6 × 19)
+- [`outliers.csv`](data/outliers.csv) — Mahalanobis distances + outlier flags
+- [`mirror_validation.csv`](data/mirror_validation.csv) — 833 A/B pair ranks
+- [`hair_morphology_guided.csv`](data/hair_morphology_guided.csv) — basic morphometrics + confidence
+
+### Run locally
+
+```bash
+# Install fibermorph with analysis extras
+pip install "fibermorph[analysis]"
+pip install notebook jupyterlab scipy scikit-learn
+
+# Open notebooks
+cd manuscript/analysis
+jupyter lab
+```
