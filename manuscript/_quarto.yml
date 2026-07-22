@@ -25,6 +25,11 @@ website:
             href: analysis/04_mirror_validation.ipynb
           - text: "05 · Shape Classification"
             href: analysis/05_shape_classification.ipynb
+          - text: "---"
+          - text: "06 · Figures Gallery"
+            href: analysis/06_figures_gallery.qmd
+          - text: "07 · Morphospace Explorer"
+            href: analysis/07_morphospace_explorer.qmd
     right:
       - icon: github
         href: https://github.com/lasisilab/fibermorph

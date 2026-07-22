@@ -1,0 +1,42 @@
+---
+title: "Figures Gallery"
+subtitle: "Pre-generated figures from the PCA morphospace and pipeline audit analyses"
+---
+
+## PCA Morphospace
+
+::: {layout-ncol=2}
+
+![**Scree plot.** Variance explained per principal component. PC1 alone captures ~43% of shape variation; the first 3 PCs together exceed 65%.](../figures/pca/fig1_scree.png)
+
+![**PCA scatter.** Individual strands in PC1 × PC2 space, coloured by individual. Horizontal spread on PC1 separates size/elongation; vertical spread on PC2 captures circularity variation.](../figures/pca/fig2_pca_scatter.png)
+
+![**Feature loadings.** Heatmap of loading magnitudes for PC1–PC4 across all 62 features. EFD coefficients dominate PC2–PC4 while size features drive PC1.](../figures/pca/fig3_loadings.png)
+
+![**F-ratio per feature.** Ratio of between-individual to within-individual variance for each morphological descriptor. Higher values indicate stronger discriminating power across individuals.](../figures/pca/fig4_f_ratio.png)
+
+![**A/B replicate consistency.** Position of matched Region A and Region B strands in PC space. Mirror pairs cluster within individual ranges, confirming cross-session reproducibility.](../figures/pca/fig5_ab_consistency.png)
+
+![**Within-individual spread.** Distribution of intra-individual morphological dispersion across replicates. Low spread confirms the pipeline captures stable biological features rather than measurement noise.](../figures/pca/fig6_intra_spread.png)
+
+![**Silhouette scores.** Per-individual silhouette score in PC space, measuring how much more similar each strand is to its own individual than to others. Positive scores throughout indicate cohesive individual clusters.](../figures/pca/fig8_silhouette.png)
+
+![**Top discriminating features.** Features ranked by between-individual F-ratio. Radial profile descriptors and low-order EFD harmonics emerge as the most informative for individual identification.](../figures/pca/fig9_top_features.png)
+
+![**Intraclass correlation (ICC).** ICC for each morphological feature computed across A/B replicate pairs. Values above 0.7 indicate high test–retest reliability for the respective descriptors.](../figures/pca/fig10_icc.png)
+
+![**Top-5 feature morphospace.** PCA scatter with the five highest-loading features for PC1 and PC2 annotated as arrows, showing how individual descriptors align with the principal axes of variation.](../figures/pca/fig_pca_top5.png)
+
+:::
+
+---
+
+## Pipeline Audit
+
+::: {layout-ncol=2}
+
+![**Mirror validation.** A/B mirror pair distances in PC space relative to non-pair (random) distances. The compression ratio of 0.437 means mirror pairs sit 2.3× closer than a random pair — direct evidence of biologically reproducible signal.](../figures/audit/mirror_validation_plot.png)
+
+![**Outlier PCA plot.** Mahalanobis outliers (red) flagged at the mean + 3 SD threshold overlaid on the full PC1 × PC2 morphospace. 29 of 1,737 strands (1.7%) are classified as outliers.](../figures/audit/outlier_pca_plot.png)
+
+:::

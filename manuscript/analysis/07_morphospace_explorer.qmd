@@ -1,0 +1,303 @@
+---
+title: "Morphospace Explorer"
+subtitle: "Navigate the hair cross-section shape space interactively"
+format:
+  html:
+    page-layout: full
+---
+
+Move the sliders below to navigate PC1–PC4 of the morphological space. The cross-section contour on the right is reconstructed in real time from the Elliptic Fourier Descriptor (EFD) component of the inverse-PCA transform — no pre-stored images are needed.
+
+```{python}
+#| echo: false
+#| output: false
+
+import numpy as np
+import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from pathlib import Path
+
+DATA_DIR = Path("../data")
+df = pd.read_csv(DATA_DIR / "shape_analysis_results.csv")
+
+SIZE_COLS  = ["area_mu2", "perimeter_mu", "min_mu", "max_mu"]
+SHAPE_COLS = ["circularity", "solidity", "convexity", "aspect_ratio",
+              "eccentricity", "radial_cv", "n_radial_peaks",
+              "asymmetry_index", "efd_deviation"]
+HU_COLS    = [f"hu{i}" for i in range(1, 8)]
+EFD_COLS   = [f"efd_{c}{h}" for h in range(1, 11) for c in ("a", "b", "c", "d")]
+ALL_COLS   = SIZE_COLS + SHAPE_COLS + HU_COLS + EFD_COLS  # 62 features
+
+pat  = r"^(?P<individual>\d+)_(?P<region>[AB])_(?P<replicate>\d+)_mask\.png$"
+meta = df["mask_filename"].str.extract(pat)
+df   = pd.concat([df, meta], axis=1)
+df   = df.dropna(subset=["individual", "region"] + ALL_COLS).reset_index(drop=True)
+
+cap = float(df["aspect_ratio"].quantile(0.99))
+df["aspect_ratio"] = df["aspect_ratio"].clip(upper=cap)
+
+scaler = StandardScaler()
+X = scaler.fit_transform(df[ALL_COLS].values.astype(np.float64))
+pca = PCA(n_components=4)
+Z   = pca.fit_transform(X)
+
+efd_idx = [ALL_COLS.index(c) for c in EFD_COLS]
+pc_std  = Z.std(axis=0).tolist()
+ev      = pca.explained_variance_ratio_.tolist()
+
+ojs_define(
+    pca_components = pca.components_.tolist(),
+    scaler_mean    = scaler.mean_.tolist(),
+    scaler_scale   = scaler.scale_.tolist(),
+    pc_scores      = Z.tolist(),
+    efd_dev        = df["efd_deviation"].tolist(),
+    ev             = ev,
+    pc_std         = pc_std,
+    efd_idx        = efd_idx,
+    individuals    = df["individual"].tolist(),
+    regions        = df["region"].tolist(),
+)
+```
+
+```{ojs}
+//| echo: false
+
+// ── Sliders ──────────────────────────────────────────────────────────────────
+viewof pc1Val = Inputs.range(
+  [-pc_std[0] * 2.5, pc_std[0] * 2.5],
+  {label: `PC1 · ${(ev[0]*100).toFixed(1)}% var.`, step: pc_std[0] / 50, value: 0}
+)
+viewof pc2Val = Inputs.range(
+  [-pc_std[1] * 2.5, pc_std[1] * 2.5],
+  {label: `PC2 · ${(ev[1]*100).toFixed(1)}% var.`, step: pc_std[1] / 50, value: 0}
+)
+viewof pc3Val = Inputs.range(
+  [-pc_std[2] * 2.5, pc_std[2] * 2.5],
+  {label: `PC3 · ${(ev[2]*100).toFixed(1)}% var.`, step: pc_std[2] / 50, value: 0}
+)
+viewof pc4Val = Inputs.range(
+  [-pc_std[3] * 2.5, pc_std[3] * 2.5],
+  {label: `PC4 · ${(ev[3]*100).toFixed(1)}% var.`, step: pc_std[3] / 50, value: 0}
+)
+```
+
+```{ojs}
+//| echo: false
+
+// ── Core functions ────────────────────────────────────────────────────────────
+
+// Inverse-PCA: PC vector → 62-element feature vector (unstandardised)
+function pcToFeatures(pcVals) {
+  const n = pca_components[0].length;  // 62
+  const x_scaled = new Array(n).fill(0);
+  pcVals.forEach((v, i) => {
+    pca_components[i].forEach((c, j) => { x_scaled[j] += v * c; });
+  });
+  return x_scaled.map((v, i) => v * scaler_scale[i] + scaler_mean[i]);
+}
+
+// EFD reconstruction: 40 coefficients → closed (x, y) contour
+function efdReconstruct(efd40, nPts = 400) {
+  const x = new Array(nPts).fill(0);
+  const y = new Array(nPts).fill(0);
+  for (let n = 1; n <= 10; n++) {
+    const a = efd40[(n-1)*4];
+    const b = efd40[(n-1)*4 + 1];
+    const c = efd40[(n-1)*4 + 2];
+    const d = efd40[(n-1)*4 + 3];
+    for (let i = 0; i < nPts; i++) {
+      const f = 2 * Math.PI * n * i / nPts;
+      x[i] += a * Math.cos(f) + b * Math.sin(f);
+      y[i] += c * Math.cos(f) + d * Math.sin(f);
+    }
+  }
+  // close
+  x.push(x[0]); y.push(y[0]);
+  return {x, y};
+}
+
+// Canonicalise: centre, rotate major axis horizontal, normalise to ±1
+function canonicalise({x, y}) {
+  const n = x.length - 1;  // exclude closing point
+  const mx = x.slice(0,n).reduce((s,v) => s+v, 0) / n;
+  const my = y.slice(0,n).reduce((s,v) => s+v, 0) / n;
+  const xc = x.map(v => v - mx);
+  const yc = y.map(v => v - my);
+
+  // Covariance for rotation
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < n; i++) { sxx += xc[i]*xc[i]; syy += yc[i]*yc[i]; sxy += xc[i]*yc[i]; }
+  sxx /= n; syy /= n; sxy /= n;
+  const disc = Math.sqrt((sxx-syy)**2 / 4 + sxy**2);
+  const l1 = (sxx+syy)/2 + disc;
+  const l2 = (sxx+syy)/2 - disc;
+  // Eigenvector for largest eigenvalue
+  let vx = sxy, vy = l1 - sxx;
+  const vlen = Math.sqrt(vx*vx + vy*vy) || 1;
+  vx /= vlen; vy /= vlen;
+  const ang = -Math.atan2(vy, vx);
+  const cosA = Math.cos(ang), sinA = Math.sin(ang);
+  let xr = xc.map((v,i) => v*cosA - yc[i]*sinA);
+  let yr = xc.map((v,i) => v*sinA + yc[i]*cosA);
+
+  // If taller than wide, rotate 90°
+  const xspan = Math.max(...xr) - Math.min(...xr);
+  const yspan = Math.max(...yr) - Math.min(...yr);
+  if (yspan > xspan) { const tmp = xr; xr = yr.map(v => -v); yr = tmp; }
+
+  // Normalise
+  const maxR = Math.max(...xr.map(Math.abs), ...yr.map(Math.abs)) || 1;
+  return xr.map((v,i) => ({x: v/maxR, y: yr[i]/maxR}));
+}
+
+// Shape metrics from contour points (shoelace)
+function shapeMetrics(pts) {
+  const n = pts.length - 1;
+  let area = 0, perim = 0;
+  for (let i = 0; i < n; i++) {
+    area  += pts[i].x * pts[i+1].y - pts[i+1].x * pts[i].y;
+    const dx = pts[i+1].x - pts[i].x, dy = pts[i+1].y - pts[i].y;
+    perim += Math.sqrt(dx*dx + dy*dy);
+  }
+  area = Math.abs(area) / 2;
+  const circ = (4 * Math.PI * area) / (perim**2 + 1e-10);
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const w = Math.max(...xs) - Math.min(...xs);
+  const h = Math.max(...ys) - Math.min(...ys);
+  const ar = Math.max(w, h) / (Math.min(w, h) + 1e-10);
+  return {circularity: Math.min(circ, 1).toFixed(3), aspectRatio: ar.toFixed(2)};
+}
+
+// Mean shape (all PCs = 0)
+meanContour = canonicalise(efdReconstruct(efd_idx.map(i => pcToFeatures([0,0,0,0])[i])))
+```
+
+```{ojs}
+//| echo: false
+
+// ── Current state ────────────────────────────────────────────────────────────
+pcVals = [pc1Val, pc2Val, pc3Val, pc4Val]
+
+currentFeatures = pcToFeatures(pcVals)
+
+currentEFD = efd_idx.map(i => currentFeatures[i])
+
+currentContour = canonicalise(efdReconstruct(currentEFD))
+
+metrics = shapeMetrics(currentContour)
+```
+
+```{ojs}
+//| echo: false
+//| layout: [[1, 1]]
+
+// ── Scatter: PC1 × PC2 ───────────────────────────────────────────────────────
+scatterData = pc_scores.map((row, i) => ({
+  pc1: row[0], pc2: row[1], pc3: row[2],
+  dev: efd_dev[i],
+  region: regions[i]
+}))
+
+devMin = Math.min(...efd_dev)
+devMax = Math.max(...efd_dev)
+
+Plot.plot({
+  title: "PC1 × PC2 morphospace",
+  caption: "★ = current slider position · Points coloured by shape complexity (EFD deviation)",
+  width: 520,
+  height: 420,
+  color: {
+    legend: true,
+    label: "EFD deviation",
+    scheme: "RdYlBu",
+    reverse: true,
+    domain: [devMin, devMax],
+  },
+  x: {label: `PC1 (${(ev[0]*100).toFixed(1)}% var.)`},
+  y: {label: `PC2 (${(ev[1]*100).toFixed(1)}% var.)`},
+  marks: [
+    Plot.dot(scatterData, {
+      x: "pc1", y: "pc2", fill: "dev",
+      r: 2.5, opacity: 0.55, stroke: "none"
+    }),
+    Plot.dot([{pc1: pc1Val, pc2: pc2Val}], {
+      x: "pc1", y: "pc2",
+      r: 10, fill: "#E63946", symbol: "star", stroke: "white", strokeWidth: 1
+    }),
+    Plot.ruleX([0], {stroke: "#aaa", strokeDasharray: "3,3"}),
+    Plot.ruleY([0], {stroke: "#aaa", strokeDasharray: "3,3"}),
+  ]
+})
+```
+
+```{ojs}
+//| echo: false
+
+// ── Reconstructed cross-section ───────────────────────────────────────────────
+Plot.plot({
+  title: "Reconstructed cross-section",
+  caption: `Circularity: ${metrics.circularity}   Aspect ratio: ${metrics.aspectRatio}`,
+  width: 420,
+  height: 420,
+  x: {domain: [-1.4, 1.4], axis: null},
+  y: {domain: [-1.4, 1.4], axis: null},
+  aspectRatio: 1,
+  marks: [
+    // Mean shape dashed
+    Plot.line(meanContour, {
+      x: "x", y: "y",
+      stroke: "#aaa", strokeWidth: 1.5, strokeDasharray: "5,4"
+    }),
+    // Current shape filled
+    Plot.area(currentContour, {
+      x: "x", y: "y",
+      fill: "#1A1A2E", fillOpacity: 0.82
+    }),
+    Plot.line(currentContour, {
+      x: "x", y: "y",
+      stroke: "#0D0D0D", strokeWidth: 2
+    }),
+  ]
+})
+```
+
+```{ojs}
+//| echo: false
+
+// ── PC position bar ───────────────────────────────────────────────────────────
+barData = pcVals.map((v, i) => ({
+  pc: `PC${i+1}`,
+  value: v,
+  lo: -pc_std[i],
+  hi:  pc_std[i],
+  color: Math.abs(v) > pc_std[i] ? "#E63946" : "#4C72B0"
+}))
+
+Plot.plot({
+  title: "Current PC position vs. ±1 SD band",
+  width: 560,
+  height: 130,
+  marginLeft: 50,
+  x: {label: "PC score", domain: [-pc_std[0]*2.6, pc_std[0]*2.6]},
+  y: {label: null},
+  marks: [
+    // ±1 SD band
+    Plot.barX(barData, {x1: "lo", x2: "hi", y: "pc", fill: "#ddd", opacity: 0.5, height: 18}),
+    // Current position bar
+    Plot.barX(barData, {x1: 0, x2: "value", y: "pc", fill: "color", height: 12}),
+    Plot.ruleX([0], {stroke: "#333", strokeWidth: 1.2}),
+    Plot.text(barData, {
+      x: "value", y: "pc",
+      text: d => d.value.toFixed(2),
+      dx: d => d.value >= 0 ? 6 : -6,
+      textAnchor: d => d.value >= 0 ? "start" : "end",
+      fontSize: 10
+    }),
+  ]
+})
+```
+
+::: {.callout-note}
+**About this explorer.** The contour is a synthetic reconstruction from the EFD (Elliptic Fourier Descriptor) component of the inverse-PCA transform. It shows the *expected* cross-section shape at a given position in morphospace — not a real strand. The grey dashed outline shows the population mean shape (all PCs = 0).
+:::

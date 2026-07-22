@@ -31,8 +31,8 @@ jobs:
       - name: Install analysis dependencies
         run: |
           pip install --upgrade pip
-          pip install "fibermorph[analysis]"
-          pip install notebook nbformat nbconvert scipy scikit-learn
+          pip install numpy pandas matplotlib seaborn scikit-learn scipy \
+                      notebook nbformat nbconvert scikit-image opencv-python-headless
 
       - name: Install Quarto
         uses: quarto-dev/quarto-actions/setup@v2
