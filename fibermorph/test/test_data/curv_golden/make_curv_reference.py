@@ -7,7 +7,10 @@ against these files. Run it inside the paper-era Python environment, NOT the
 environment fibermorph is developed in:
 
     Python 3.8.20, scikit-image 0.16.2, numpy 1.18.5, scipy 1.4.1,
-    pandas 1.0.5, Pillow 7.2.0   (the versions pinned by v0.3.1)
+    pandas 1.0.5, Pillow 7.2.0
+    (scikit-image and scipy are the versions pinned by v0.3.1's
+    environment.yml; the rest are the closest builds that install today,
+    see README.md)
 
 The script loads fibermorph.py and _version.py of the v0.3.1 tag unmodified
 and calls v0.3.1's ``curvature_seq`` twice per window setting: once with

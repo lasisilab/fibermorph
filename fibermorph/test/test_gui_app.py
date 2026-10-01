@@ -415,4 +415,3 @@ def test_local_text_follows_the_configured_upload_cap(monkeypatch, set_upload_ca
     others = {"500 MB", "2 GB", "300 MB", "5 GB"} - {shown}
     page = "\n".join(_rendered_text(at))
     assert not [o for o in others if o in page], [o for o in others if o in page]
-

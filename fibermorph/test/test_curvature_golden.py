@@ -210,10 +210,14 @@ class TestDownloadHelper:
             _fetch_demo_image("none.tiff", tmp_path, base_url="http://127.0.0.1:9/")
 
     def test_local_folder_is_used_without_download(self, tmp_path, monkeypatch):
-        (tmp_path / "x.tiff").write_bytes(b"II*\x00")
-        monkeypatch.setenv("FIBERMORPH_DEMO_CURV_DIR", str(tmp_path))
-        assert _fetch_demo_image("x.tiff", tmp_path, base_url="http://127.0.0.1:9/") == (
-            tmp_path / "x.tiff"
+        local_dir = tmp_path / "local"
+        dest_dir = tmp_path / "dest"
+        local_dir.mkdir()
+        dest_dir.mkdir()
+        (local_dir / "x.tiff").write_bytes(b"II*\x00")
+        monkeypatch.setenv("FIBERMORPH_DEMO_CURV_DIR", str(local_dir))
+        assert _fetch_demo_image("x.tiff", dest_dir, base_url="http://127.0.0.1:9/") == (
+            local_dir / "x.tiff"
         )
 
 

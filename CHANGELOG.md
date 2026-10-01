@@ -31,11 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reachable.
 - **Hosted visitors can no longer set the SAM2 checkpoint.** In hosted mode
   (plain `fibermorph-gui`) the Cross-Section view has no "SAM2 checkpoint path"
-  box: the server always uses `SAM2_CHECKPOINT`, or the packaged default path, and
+  box: the server always uses the file named by `SAM2_CHECKPOINT`, and
   its path is not shown in any view (the Run Remote view's checkpoint box now
-  starts empty). A host that wants SAM2 segmentation must set `SAM2_CHECKPOINT`
-  (or put the file at the default path) on a machine with a GPU, and restart the
-  app after changing it. Local mode (`--local`) is unchanged. Details are in
+  starts empty). fibermorph does not ship a SAM2 checkpoint, so a host that
+  wants SAM2 segmentation must download one, set `SAM2_CHECKPOINT` to it on a
+  machine with a GPU, and restart the app after changing it. Local mode (`--local`) is unchanged. Details are in
   **Security** below.
 - **How the launcher's server options interact with Streamlit's settings.**
   `--server.maxUploadSize` (500 MB hosted, 5000 MB local) is passed on the command
@@ -130,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fibermorph.core.frangi_v016.frangi_v016`, a copy of the 0.16.2 filter
   (BSD-3-Clause, scikit-image copyright and license kept in the file), which
   matches scikit-image 0.16.2 to about 1e-16. **Curvature values differ from
-  those produced by 1.0.x or by the unreleased 2.0.0 code on newer
+  those produced by 0.3.x and 1.0.x releases or by the unreleased 2.0.0 code on newer
   scikit-image** (they now agree with the original published values).
   "Default options" means no CLAHE and no extended curvature. Two options are
   not the v0.3.1 method and do not reproduce it: CLAHE (`--use-clahe`,
@@ -142,8 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `workflows.batch` and of the "Extended curvature metrics" switch in the
   GUI's SLURM script builder, so batch runs started with those defaults also
   differ from v0.3.1.
-- **Whole-hair curvature mode and per-hair `test` output restored.** The 1.0.0
-  refactor dropped two behaviors of the original `window_iter`
+- **Whole-hair curvature mode and per-hair `test` output restored.** The
+  refactor first released in 0.3.7 dropped two behaviors of the original `window_iter`
   (`fibermorph.core.curvature`): (1) with `window_size=None` (the CLI default
   when `--window_size` is omitted) it returned an empty table instead of fitting
   one circle to each hair; it now again fits one Taubin circle per hair, keeps
@@ -171,8 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
   Cross-Section view's settings, the "SAM2 checkpoint path" text box is now shown
-  only in local mode. In hosted mode the server's own checkpoint (`SAM2_CHECKPOINT`,
-  or the packaged default path) is always used, and a caption says whether a
+  only in local mode. In hosted mode the server's own checkpoint (the file named
+  by `SAM2_CHECKPOINT`) is always used, and a caption says whether a
   checkpoint file was found (and that SAM2 also needs a GPU on the server), without
   showing the server path. Before, any visitor could type a path and the server
   would try to load that file as a model. The server's

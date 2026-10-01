@@ -855,13 +855,15 @@ elif _view == "local":
         "size cap, and you can read straight from a folder on disk.",
     ), unsafe_allow_html=True)
     st.markdown(
-        "**Why:** this hosted app runs on a shared server, so it can't reach files "
-        f"on your computer and it caps uploads ({_UPLOAD_CAP} here), so a larger scan "
-        "— a multi-gigabyte curvature image, say — won't upload.\n\n"
+        "**Why:** a hosted copy of this app runs on a shared server, so it can't reach "
+        "files on your computer and it caps uploads"
+        + ("" if _LOCAL else f" ({_UPLOAD_CAP} here)")
+        + ", so a larger scan — a multi-gigabyte curvature image, say — won't "
+        "upload.\n\n"
         "**Fix:** fibermorph is an ordinary Python package, and this whole interface "
         "ships with it. Install it once and launch the *same* app on your own "
-        "machine — Streamlit runs perfectly well locally — where there's no upload "
-        "limit and you can point it straight at a folder of images:\n\n"
+        "machine — Streamlit runs perfectly well locally — where you can point it "
+        "straight at a folder of images, with nothing to upload:\n\n"
         "```bash\n"
         "pip install 'fibermorph[gui]'\n"
         "fibermorph-gui --local\n"

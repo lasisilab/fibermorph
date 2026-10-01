@@ -115,7 +115,8 @@ for you.)
 > **`--local` is for your own computer, not for servers.** Plain `fibermorph-gui`
 > (no flag) starts the app in hosted mode: uploads only, a 500 MB upload cap, no
 > "Folder on disk" input, and the SAM2 checkpoint is whatever the server is
-> configured with (`SAM2_CHECKPOINT`, or the packaged default path). Visitors
+> configured with (the file named by `SAM2_CHECKPOINT`; fibermorph does not ship
+> one). Visitors
 > cannot change it, and its path is not shown in any view. Local mode lets anyone
 > who can open the page read folders on the machine it runs on, so don't expose it
 > on a shared server. Setting the environment
@@ -123,8 +124,8 @@ for you.)
 >
 > Any other arguments to `fibermorph-gui` are passed through to `streamlit run` after
 > the launcher's own options, so they can override them, for example
-> `fibermorph-gui --local --server.port 8600`. (Before this, extra arguments were
-> ignored.) How the launcher's options interact with Streamlit's other settings:
+> `fibermorph-gui --local --server.port 8600`. How the launcher's options interact
+> with Streamlit's other settings:
 >
 > - `--server.maxUploadSize` (500 MB hosted, 5000 MB local) is passed on the command
 >   line, which outranks `.streamlit/config.toml`. If the environment variable
