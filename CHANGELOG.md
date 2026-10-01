@@ -80,6 +80,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `workflows.batch` and of the "Extended curvature metrics" switch in the
   GUI's SLURM script builder, so batch runs started with those defaults also
   differ from v0.3.1.
+- **Whole-hair curvature mode and per-hair `test` output restored.** The 1.0.0
+  refactor dropped two behaviors of the original `window_iter`
+  (`fibermorph.core.curvature`): (1) with `window_size=None` (the CLI default
+  when `--window_size` is omitted) it returned an empty table instead of fitting
+  one circle to each hair; it now again fits one Taubin circle per hair, keeps
+  hairs longer than 0.5 × resolution pixels, and returns `ID, curv_mean,
+  curv_median, length_mean, length_median, hair_count`; (2) with `test=True` it
+  returned the image summary instead of one row per hair (`curv_mean,
+  curv_median, length`, or `curv, length` for whole hair), which broke the
+  simulated-data validation (`fibermorph.demo.demo.validation_curv` /
+  `dummy_curv`) that reads `length` and `curv_median` per hair. Whole-hair mode
+  on an image with no hair above the minimum length returns `hair_count` 0 and
+  NaN means rather than raising an error.
 - **Section resolution unit mislabel** (`µm/px` where the code needs `px/µm`) in
   the GUI and docstrings — the cause of "empty mask" segmentation failures on
   correctly-focused images.

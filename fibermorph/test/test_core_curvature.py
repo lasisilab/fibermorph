@@ -211,7 +211,7 @@ class TestAnalyzeAllCurvSynthetic:
             resolution=1.0,
             window_size=30,
             window_unit="px",
-            test=True,
+            test=False,
             within_element=False,
         )
 
@@ -231,7 +231,7 @@ class TestAnalyzeAllCurvSynthetic:
             resolution=1.0,
             window_size=30,
             window_unit="px",
-            test=True,
+            test=False,
             within_element=False,
         )
 
@@ -307,3 +307,126 @@ class TestAnalyzeAllCurv:
         )
         
         assert isinstance(result, pd.DataFrame)
+
+
+def _create_two_line_skeleton(long_len: int = 120, short_len: int = 30) -> np.ndarray:
+    """Two separate horizontal lines of different lengths."""
+    canvas = np.zeros((200, 200), dtype=np.uint8)
+    rr, cc = sk_draw.line(60, 20, 60, 20 + long_len - 1)
+    canvas[rr, cc] = 1
+    rr, cc = sk_draw.line(150, 20, 150, 20 + short_len - 1)
+    canvas[rr, cc] = 1
+    return canvas
+
+
+class TestPerHairOutputWhenTestTrue:
+    """test=True returns one row per hair (used by the simulated-data validation)."""
+
+    def test_window_mode_returns_per_hair_rows(self, tmp_path):
+        result = analyze_all_curv(
+            _create_two_line_skeleton(), "two_lines", tmp_path,
+            resolution=1.0, window_size=15, window_unit="px",
+            test=True, within_element=False,
+        )
+        assert list(result.columns) == ["curv_mean", "curv_median", "length"]
+        assert len(result) == 2
+        assert sorted(result["length"].round(0)) == [30.0, 120.0]
+
+    def test_window_mode_summary_when_test_false(self, tmp_path):
+        result = analyze_all_curv(
+            _create_two_line_skeleton(), "two_lines", tmp_path,
+            resolution=1.0, window_size=15, window_unit="px",
+            test=False, within_element=False,
+        )
+        assert list(result.columns) == [
+            "ID", "curv_mean_mean", "curv_mean_median", "curv_median_mean",
+            "curv_median_median", "length_mean", "length_median", "hair_count",
+        ]
+        assert result["hair_count"].iloc[0] == 2
+
+    def test_per_hair_arc_curvature_matches_radius(self, tmp_path):
+        """What validation_curv reads: curv_median per hair, close to 1/radius."""
+        radius = 60
+        result = analyze_all_curv(
+            _create_arc_skeleton(radius=radius), "arc", tmp_path,
+            resolution=1.0, window_size=30, window_unit="px",
+            test=True, within_element=False,
+        )
+        assert len(result) == 1
+        assert result["curv_median"].iloc[0] == pytest.approx(1.0 / radius, rel=0.35)
+
+
+class TestWholeHairMode:
+    """window_size=None fits one Taubin circle to each hair (v0.3.1 behavior)."""
+
+    def test_summary_columns_and_values(self, tmp_path):
+        radius = 60
+        result = analyze_all_curv(
+            _create_arc_skeleton(radius=radius), "whole_arc", tmp_path,
+            resolution=1.0, window_size=None, window_unit="px",
+            test=False, within_element=False,
+        )
+        assert list(result.columns) == [
+            "ID", "curv_mean", "curv_median", "length_mean", "length_median",
+            "hair_count",
+        ]
+        assert result["ID"].iloc[0] == "whole_arc"
+        assert result["hair_count"].iloc[0] == 1
+        assert result["curv_mean"].iloc[0] == pytest.approx(1.0 / radius, rel=0.1)
+        assert result["curv_mean"].iloc[0] == result["curv_median"].iloc[0]
+
+    def test_straight_line_has_zero_curvature(self, tmp_path):
+        result = analyze_all_curv(
+            _create_line_skeleton(length=140), "whole_line", tmp_path,
+            resolution=1.0, window_size=None, window_unit="px",
+            test=False, within_element=False,
+        )
+        assert result["curv_mean"].iloc[0] == pytest.approx(0.0, abs=1e-3)
+
+    def test_test_true_returns_per_hair_curv_and_length(self, tmp_path):
+        result = analyze_all_curv(
+            _create_two_line_skeleton(), "whole_two", tmp_path,
+            resolution=1.0, window_size=None, window_unit="px",
+            test=True, within_element=False,
+        )
+        assert list(result.columns) == ["curv", "length"]
+        assert len(result) == 2
+
+    def test_hairs_shorter_than_half_resolution_are_skipped(self, tmp_path):
+        """With resolution 100 px/mm the minimum is 50 px: the 30 px hair is dropped."""
+        result = analyze_all_curv(
+            _create_two_line_skeleton(long_len=120, short_len=30), "whole_min", tmp_path,
+            resolution=100.0, window_size=None, window_unit="px",
+            test=False, within_element=False,
+        )
+        assert result["hair_count"].iloc[0] == 1
+        assert result["length_mean"].iloc[0] == pytest.approx(1.2)
+
+    def test_writes_per_hair_csv(self, tmp_path):
+        analyze_all_curv(
+            _create_line_skeleton(length=140), "whole_csv", tmp_path,
+            resolution=1.0, window_size=None, window_unit="px",
+            test=False, within_element=False,
+        )
+        saved = pd.read_csv(tmp_path / "analysis" / "ImageSum_whole_csv.csv", index_col=0)
+        assert list(saved.columns) == ["curv", "length"]
+        assert len(saved) == 1
+
+    def test_no_qualifying_hair_returns_empty_summary(self, tmp_path):
+        """An image with no hair above the minimum length must not raise."""
+        result = analyze_all_curv(
+            np.zeros((50, 50), dtype=np.uint8), "whole_none", tmp_path,
+            resolution=100.0, window_size=None, window_unit="px",
+            test=False, within_element=False,
+        )
+        assert result["hair_count"].iloc[0] == 0
+        assert np.isnan(result["curv_mean"].iloc[0])
+
+    def test_window_list_may_mix_none_and_sizes(self, tmp_path):
+        """A list of window sizes can include None (whole hair)."""
+        result = analyze_all_curv(
+            _create_line_skeleton(length=140), "mixed", tmp_path,
+            resolution=1.0, window_size=[None, 30], window_unit="px",
+            test=False, within_element=False,
+        )
+        assert len(result) == 2
