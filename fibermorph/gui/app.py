@@ -36,7 +36,7 @@ import pandas as pd
 import streamlit as st
 
 from fibermorph.utils.units import resolution_to_px_per_unit
-from fibermorph.gui import styles
+from fibermorph.gui import inputs, styles
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call
@@ -100,11 +100,17 @@ def _process_section_gui(
     use_sam2: bool,
     sam2_checkpoint: str,
     return_mask: bool = False,
+    display_name: str | None = None,
 ):
     """Run section analysis on a single image.
 
     Returns dict of measurements, or (dict, gray_img, mask_uint8) when
     return_mask=True. Returns None if no cross-section was detected.
+
+    display_name is the image's name as the user knows it (for an upload, the
+    uploaded filename, not the generated name of the temporary file). It is
+    recorded in the result's ID and mask_filename fields; it defaults to the
+    basename of tmp_path.
     """
     import cv2
     from fibermorph.processing.section_sam2 import segment_section
@@ -136,7 +142,9 @@ def _process_section_gui(
 
     mask_uint8, confidence, method = seg_result
 
-    df = section_props_extended(mask_uint8, os.path.basename(tmp_path), resolution_mu)
+    df = section_props_extended(
+        mask_uint8, display_name or os.path.basename(tmp_path), resolution_mu
+    )
     if df is None or df.empty:
         return None
 
@@ -267,18 +275,13 @@ def _gather_inputs(source, tmpdir):
     """Turn a picker result into a list of (display_name, filepath).
 
     Folder mode reads paths directly from disk; upload mode persists each
-    uploaded file into tmpdir first.
+    uploaded file into tmpdir first, under a generated name (the client's
+    filename is only used as the display name — see fibermorph.gui.inputs).
     """
     mode, payload = source
     if mode == "folder":
         return [(os.path.basename(p), p) for p in _list_folder_images(payload)]
-    out = []
-    for up in payload or []:
-        p = os.path.join(tmpdir, up.name)
-        with open(p, "wb") as fh:
-            fh.write(up.read())
-        out.append((up.name, p))
-    return out
+    return inputs.save_uploads(payload, tmpdir)
 
 
 def _source_is_empty(source):
@@ -381,7 +384,7 @@ _FILENAME_NOTE = (
     "at a time and does no grouping — name your files however you'll want to group "
     "them (within/between individual) in your own downstream analysis."
 )
-_UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
+_UPLOAD_TYPES = inputs.UPLOAD_TYPES
 
 # ---------------------------------------------------------------------------
 # Sidebar: brand + navigation + status (replaces the top tab bar)
@@ -477,9 +480,10 @@ if _view == "section":
                             use_sam2=bool(sec_sam2),
                             sam2_checkpoint=str(sec_ckpt),
                             return_mask=True,
+                            display_name=name,
                         )
                     except Exception as e:
-                        st.warning(f"{name}: {e}")
+                        st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
                         out = None
 
                     if out is not None:
@@ -674,7 +678,7 @@ elif _view == "curvature":
                             extended=bool(curv_ext),
                         )
                     except Exception as e:
-                        st.warning(f"{name}: {e}")
+                        st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
                         result = None
 
                     frags = result.get("fragments") if result else None

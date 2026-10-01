@@ -3,8 +3,10 @@
 Hosted mode (FIBERMORPH_LOCAL unset) must not offer anything that touches the
 server's disk: no "Folder on disk" input, no SAM2 checkpoint path box, and the
 server's SAM2 checkpoint path is not shown anywhere (the Run Remote view's
-checkpoint box, which only fills in an SBATCH script, starts empty). The Run
-Local view must tell people to start local mode with `fibermorph-gui --local`.
+checkpoint box, which only fills in an SBATCH script, starts empty). Uploads
+must be measured separately even when file names repeat, and must report the
+uploaded file names, not the names of the temporary files. The Run Local view
+must tell people to start local mode with `fibermorph-gui --local`.
 """
 
 import io
@@ -263,6 +265,82 @@ def test_local_uses_the_checkpoint_typed_in_the_box(monkeypatch, tmp_path, seen_
     at.run()
     _click(at, "sec_run")
     assert seen_checkpoints == [chosen]
+
+
+# ---------------------------------------------------------------------------
+# Uploads: hostile names, duplicate names, and reported file names
+# ---------------------------------------------------------------------------
+
+@needs_upload_support
+def test_section_duplicate_uploads_are_measured_separately_and_named_as_uploaded(
+        monkeypatch, tmp_path):
+    escape = tmp_path / "escaped.png"
+    at = _run_app(monkeypatch, local=False)
+    at.file_uploader[0].set_value([
+        ("sample.png", _section_png(100), "image/png"),
+        ("sample.png", _section_png(130), "image/png"),
+        (str(escape), _section_png(110), "image/png"),
+        ("..\\..\\win\\path.png", _section_png(120), "image/png"),
+    ])
+    at.run()
+    _click(at, "sec_run")
+
+    df = at.session_state["section_results"]
+    assert list(df["source_file"]) == ["sample.png", "sample.png", "escaped.png", "path.png"]
+    # Every column that carries a file name shows the uploaded name, never
+    # the generated temp name (upload_0001.png ...).
+    assert list(df["ID"]) == list(df["source_file"])
+    assert list(df["mask_filename"]) == list(df["source_file"])
+    assert "upload_" not in df.to_csv(index=False)
+    # The two "sample.png" uploads are different images and give different areas.
+    assert df["area_mu2"].iloc[0] != pytest.approx(df["area_mu2"].iloc[1], rel=0.05)
+    assert [name for name, _, _ in at.session_state["seg_store"]] == list(df["source_file"])
+    assert not escape.exists()
+    assert any("Duplicate filenames" in w.value and "sample.png" in w.value for w in at.warning)
+
+
+@needs_upload_support
+def test_curvature_duplicate_uploads_are_measured_separately_and_named_as_uploaded(
+        monkeypatch):
+    def fiber_png(amplitude, size=800):
+        img = np.full((size, size), 230, dtype=np.uint8)
+        xs = np.arange(40, size - 40)
+        ys = (size // 2 + amplitude * np.sin(2 * np.pi * 2 * xs / size)).astype(int)
+        for x, y in zip(xs, ys):
+            img[y - 2:y + 3, x] = 20
+        buf = io.BytesIO()
+        Image.fromarray(img, mode="L").save(buf, format="PNG")
+        return buf.getvalue()
+
+    at = _run_app(monkeypatch, local=False, view="curvature")
+    at.file_uploader[0].set_value([
+        ("fiber.png", fiber_png(20), "image/png"),
+        ("../../fiber.png", fiber_png(80), "image/png"),
+    ])
+    at.run()
+    _click(at, "curv_run")
+
+    frags = at.session_state["curvature_fragments"]
+    summ = at.session_state["curvature_summary"]
+    assert list(frags["source_file"]) == ["fiber.png", "fiber.png"]
+    assert list(summ["source_file"]) == ["fiber.png", "fiber.png"]
+    assert "upload_" not in frags.to_csv(index=False)
+    assert "upload_" not in summ.to_csv(index=False)
+    # Two different images, so two different measurements (not the second one twice).
+    assert frags["length"].iloc[0] != pytest.approx(frags["length"].iloc[1], rel=0.01)
+    assert summ["length_mean"].iloc[0] != pytest.approx(summ["length_mean"].iloc[1], rel=0.01)
+    assert any("Duplicate filenames" in w.value for w in at.warning)
+
+
+@needs_upload_support
+def test_unreadable_upload_error_names_the_uploaded_file(monkeypatch):
+    at = _run_app(monkeypatch, local=False, view="curvature")
+    at.file_uploader[0].set_value([("my scan.tif", b"not an image", "image/tiff")])
+    at.run()
+    _click(at, "curv_run")
+    messages = [w.value for w in at.warning]
+    assert any(m.startswith("my scan.tif: ") for m in messages), messages
+    assert not any("upload_" in m for m in messages), messages
 
 
 # ---------------------------------------------------------------------------

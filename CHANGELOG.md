@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the upload cap raised to 5 GB and a "Folder on disk" input that reads images
   straight from a directory (no upload). A Run Local view documents this and
   shows whether you are running hosted or local.
+- `fibermorph.gui.inputs`: `save_uploads()`, `display_name()` and
+  `safe_extension()` for saving uploaded files under generated names (usable and
+  testable without running Streamlit).
 - `fibermorph-gui --help` documents `--local`; the launcher prints which mode it
   is starting in.
 - **Lasisi Lab GUI design system** (`fibermorph.gui.styles`): a left sidebar
@@ -92,6 +95,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the GUI and docstrings — the cause of "empty mask" segmentation failures on
   correctly-focused images.
 - US spelling throughout the GUI (analyze, fiber, color).
+- **Uploads with the same filename were all measured as the last one.** The GUI
+  saved each upload to a temporary path named after the uploaded file, so two
+  uploads with the same name overwrote each other and both result rows measured
+  the second file, even though the on-screen warning said each file is measured
+  separately. Uploads are now saved under distinct generated names, and each is
+  measured on its own; `source_file` (and the `ID` / `mask_filename` columns of
+  cross-section results, the mask previews, the curvature tables and the error
+  messages shown for a file) still show the uploaded filename.
 
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
@@ -107,6 +118,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   box is left blank. The first SAM2 model the server loads is kept for the life of
   the process, so restart the app after changing `SAM2_CHECKPOINT` or replacing the
   checkpoint file.
+- **Uploaded filenames are no longer used to build paths on the server.** The
+  GUI wrote each upload to `<temp dir>/<uploaded filename>`, so a crafted name
+  (an absolute path, `..` segments, Windows `\` separators) could write outside the
+  temporary directory. Uploads are now written as `upload_0001.<ext>`,
+  `upload_0002.<ext>`, ... directly inside the temporary directory (the original
+  extension is kept only if it is tif, tiff, png, jpg or jpeg); the uploaded
+  filename is used only as a display label, reduced to its last path component.
 
 ## [2.0.0] - 2026-05-14
 
