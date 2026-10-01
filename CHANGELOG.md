@@ -93,6 +93,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   correctly-focused images.
 - US spelling throughout the GUI (analyze, fiber, color).
 
+### Security
+- **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
+  Cross-Section view's settings, the "SAM2 checkpoint path" text box is now shown
+  only in local mode. In hosted mode the server's own checkpoint (`SAM2_CHECKPOINT`,
+  or the packaged default path) is always used, and a caption says whether one is
+  configured, without showing the server path. Before, any visitor could type a
+  path and the server would try to load that file as a model. The server's
+  checkpoint path is not shown in any hosted view: the Run Remote view's
+  "SAM2 checkpoint path" box, which only fills in the generated SBATCH script text
+  and is never loaded by the server, now starts empty in hosted mode (in local mode
+  it is still pre-filled), and the script uses `YOUR_SAM2_CHECKPOINT` there if the
+  box is left blank. The first SAM2 model the server loads is kept for the life of
+  the process, so restart the app after changing `SAM2_CHECKPOINT` or replacing the
+  checkpoint file.
+
 ## [2.0.0] - 2026-05-14
 
 ### Breaking Changes

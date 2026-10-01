@@ -440,7 +440,18 @@ if _view == "section":
         sec_res_mu   = resolution_to_px_per_unit(sec_res_val, sec_res_unit)
         st.caption(f"Working resolution: **{sec_res_mu:.4g} px/µm**")
         sec_sam2     = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
-        sec_ckpt     = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
+        if _LOCAL:
+            sec_ckpt = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
+        else:
+            # Hosted: visitors must not choose which file the server loads as a
+            # model, so use the server-configured checkpoint and don't show its path.
+            sec_ckpt = _DEFAULT_CHECKPOINT
+            st.caption(
+                "SAM2 checkpoint: configured on this server."
+                if os.path.isfile(sec_ckpt) else
+                "SAM2 checkpoint: none configured on this server, so SAM2 "
+                "segmentation falls back to watershed."
+            )
 
     if st.button("▶ Analyze cross-sections", type="primary", key="sec_run"):
         if _source_is_empty(sec_source):
@@ -920,7 +931,16 @@ elif _view == "remote":
         resolution_mu  = resolution_to_px_per_unit(sec_res_val_b, sec_res_unit_b)
         st.caption(f"Script will pass **--resolution_mu {resolution_mu:.4g}** (px/µm).")
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
-        sam2_checkpoint = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT)
+        # This value only goes into the generated script text for another machine.
+        # Hosted: don't pre-fill the server's own checkpoint path (it is not
+        # useful on a cluster and visitors must not see it); leave it empty.
+        sam2_checkpoint = st.text_input(
+            "SAM2 checkpoint path",
+            value=_DEFAULT_CHECKPOINT if _LOCAL else "",
+            placeholder="/path/to/sam2.1_hiera_tiny.pt",
+            help="Path to the SAM2 checkpoint on the machine you'll run on. Left "
+                 "blank, the script uses YOUR_SAM2_CHECKPOINT for you to fill in.",
+        )
         ext_features    = st.toggle(
             "Extended features (EFD, Hu moments, radial profile, shape class)", value=True
         )
@@ -990,9 +1010,10 @@ elif _view == "remote":
                     f"    --jobs {int(slurm_cpus)}",
                 ]
                 if use_sam2:
+                    ckpt_arg = sam2_checkpoint.strip() or "YOUR_SAM2_CHECKPOINT"
                     sec_flags += [
                         "    --use-sam2",
-                        f"    --sam2-checkpoint '{sam2_checkpoint}'",
+                        f"    --sam2-checkpoint '{ckpt_arg}'",
                     ]
                 if ext_features:
                     sec_flags.append("    --extended-features")

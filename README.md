@@ -106,15 +106,19 @@ fibermorph-gui --local         # opens the local GUI at http://localhost:8501
 ```
 
 Launched with `--local`, the GUI runs on your own machine with the upload cap raised
-to **5 GB** and a **"Folder on disk"** input on the Cross-Section and Curvature views,
-so you can analyze images that are too large to upload to the hosted app. Local mode
-listens on `localhost` only. (On a machine's first-ever Streamlit run it may briefly
-ask for an email — the launcher skips that for you.)
+to **5 GB**, a **"Folder on disk"** input on the Cross-Section and Curvature views,
+and an editable SAM2 checkpoint path, so you can analyze images that are too large to
+upload to the hosted app. Local mode listens on `localhost` only. (On a machine's
+first-ever Streamlit run it may briefly ask for an email — the launcher skips that
+for you.)
 
 > **`--local` is for your own computer, not for servers.** Plain `fibermorph-gui`
-> (no flag) starts the app in hosted mode: uploads only, a 500 MB upload cap, and no
-> "Folder on disk" input. Local mode lets anyone who can open the page read folders on
-> the machine it runs on, so don't expose it on a shared server. Setting the environment
+> (no flag) starts the app in hosted mode: uploads only, a 500 MB upload cap, no
+> "Folder on disk" input, and the SAM2 checkpoint is whatever the server is
+> configured with (`SAM2_CHECKPOINT`, or the packaged default path). Visitors
+> cannot change it, and its path is not shown in any view. Local mode lets anyone
+> who can open the page read folders on the machine it runs on, so don't expose it
+> on a shared server. Setting the environment
 > variable `FIBERMORPH_LOCAL=1` is equivalent to passing `--local`.
 >
 > Any other arguments to `fibermorph-gui` are passed through to `streamlit run` after
