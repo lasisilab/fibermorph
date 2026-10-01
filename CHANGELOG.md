@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still apply. A container started with `FIBERMORPH_LOCAL=1` now listens on
   `localhost` only and needs `--server.address 0.0.0.0` on the command to be
   reachable.
+- **Hosted visitors can no longer set the SAM2 checkpoint.** In hosted mode
+  (plain `fibermorph-gui`) the Cross-Section view has no "SAM2 checkpoint path"
+  box: the server always uses `SAM2_CHECKPOINT`, or the packaged default path, and
+  its path is not shown in any view (the Run Remote view's checkpoint box now
+  starts empty). A host that wants SAM2 segmentation must set `SAM2_CHECKPOINT`
+  (or put the file at the default path) on a machine with a GPU, and restart the
+  app after changing it. Local mode (`--local`) is unchanged. Details are in
+  **Security** below.
 - **How the launcher's server options interact with Streamlit's settings.**
   `--server.maxUploadSize` (500 MB hosted, 5000 MB local) is passed on the command
   line, so it overrides `.streamlit/config.toml`; it is not passed when the
@@ -59,9 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the upload cap raised to 5 GB and a "Folder on disk" input that reads images
   straight from a directory (no upload). A Run Local view documents this and
   shows whether you are running hosted or local.
-- `fibermorph.gui.inputs`: `save_uploads()`, `display_name()` and
-  `safe_extension()` for saving uploaded files under generated names (usable and
-  testable without running Streamlit).
+- `fibermorph.gui.inputs`: `save_uploads()`, `display_name()`, `safe_extension()`
+  and `restore_names()` for saving uploaded files under generated names and
+  putting the uploaded name back into error messages, plus `format_upload_cap()`
+  for showing the upload cap as "500 MB" or "5 GB" (all usable and testable
+  without running Streamlit).
 - `fibermorph-gui --help` documents `--local`; the launcher prints which mode it
   is starting in.
 - **Lasisi Lab GUI design system** (`fibermorph.gui.styles`): a left sidebar
