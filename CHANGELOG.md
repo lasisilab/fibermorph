@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   console (brand lockup, grouped nav with SVG glyphs, status footer), per-view
   headers, at-a-glance metric cards, and brand-colored charts.
 - Help text for the Taubin window and CLAHE controls in the GUI.
+- **Golden curvature tests** (`fibermorph/test/test_curvature_golden.py`) that
+  compare per-hair and summary curvature against output of the original v0.3.1
+  code (scikit-image 0.16.2) for a window in px, a window in mm and the
+  whole-hair mode, with the default options (no CLAHE, no extended curvature).
+  They run offline on a small synthetic image; a second set downloads the two
+  lab demo curvature images (about 6 MB, fetched once per test run) and is
+  skipped if the download fails (or reads them from
+  `FIBERMORPH_DEMO_CURV_DIR`). The references and the script that made them are
+  in `fibermorph/test/test_data/curv_golden/`.
 
 ### Changed
 - **GUI is now a sidebar console** with four views — **Cross-Section**,
@@ -55,6 +64,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pipeline now emits a single per-image table.
 
 ### Fixed
+- **Curvature with the default options now reproduces the original published
+  method (v0.3.1) whichever scikit-image is installed.** The ridge-detection
+  step called `skimage.filters.frangi`, whose output changed after scikit-image
+  0.16.2 (default `gamma` 15 → computed from the image, and changes to the
+  Hessian computation), so the same fibermorph code gave different curvature on
+  different scikit-image versions. Example: on the straight-hair demo image
+  (`027_demo_nocurv`, 50 px window, 132 px/mm) mean curvature is 0.0526 mm⁻¹
+  with scikit-image 0.16.2 but 0.173 mm⁻¹ with 0.26 (3.3×); on the curly demo
+  image (`004_demo_curv`) mean curvature changes by 1.1%, median curvature by
+  3.4% and length by 2.9%. `filter_curv` now uses
+  `fibermorph.core.frangi_v016.frangi_v016`, a copy of the 0.16.2 filter
+  (BSD-3-Clause, scikit-image copyright and license kept in the file), which
+  matches scikit-image 0.16.2 to about 1e-16. **Curvature values differ from
+  those produced by 1.0.x or by the unreleased 2.0.0 code on newer
+  scikit-image** (they now agree with the original published values).
+  "Default options" means no CLAHE and no extended curvature. Two options are
+  not the v0.3.1 method and do not reproduce it: CLAHE (`--use-clahe`,
+  `filter_curv_clahe`) still uses the installed scikit-image, and extended
+  curvature (`--extended-curvature`, `extended_curvature=True`) builds the
+  skeleton with a medial axis instead of v0.3.1's skeletonize (and the medial
+  axis breaks ties at random, so repeated runs differ slightly from each
+  other). Extended curvature is the default of `run_batch`,
+  `workflows.batch` and of the "Extended curvature metrics" switch in the
+  GUI's SLURM script builder, so batch runs started with those defaults also
+  differ from v0.3.1.
+- **Whole-hair curvature mode and per-hair `test` output restored.** The 1.0.0
+  refactor dropped two behaviors of the original `window_iter`
+  (`fibermorph.core.curvature`): (1) with `window_size=None` (the CLI default
+  when `--window_size` is omitted) it returned an empty table instead of fitting
+  one circle to each hair; it now again fits one Taubin circle per hair, keeps
+  hairs longer than 0.5 × resolution pixels, and returns `ID, curv_mean,
+  curv_median, length_mean, length_median, hair_count`; (2) with `test=True` it
+  returned the image summary instead of one row per hair (`curv_mean,
+  curv_median, length`, or `curv, length` for whole hair), which broke the
+  simulated-data validation (`fibermorph.demo.demo.validation_curv` /
+  `dummy_curv`) that reads `length` and `curv_median` per hair. Whole-hair mode
+  on an image with no hair above the minimum length returns `hair_count` 0 and
+  NaN means rather than raising an error.
 - **Section resolution unit mislabel** (`µm/px` where the code needs `px/µm`) in
   the GUI and docstrings — the cause of "empty mask" segmentation failures on
   correctly-focused images.

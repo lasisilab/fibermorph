@@ -305,14 +305,24 @@ def window_iter(
     output_path : str or pathlib.Path
         Output directory path.
     test : bool
-        Whether this is a test run.
+        Whether this is a validation run. If True, the per-hair table is
+        returned instead of the image summary (one row per hair, with columns
+        ``curv_mean``, ``curv_median`` and ``length`` for a window size, or
+        ``curv`` and ``length`` for the whole-hair mode).
     within_element : bool
         Whether to save within-element data.
 
     Returns
     -------
     pd.DataFrame
-        Summary DataFrame for the image.
+        Summary DataFrame for the image (columns ``ID``, ``curv_mean_mean``,
+        ``curv_mean_median``, ``curv_median_mean``, ``curv_median_median``,
+        ``length_mean``, ``length_median``, ``hair_count``). With
+        ``window_size=None`` (whole hair: one circle fitted to each hair, hairs
+        shorter than 0.5 * ``resolution`` pixels skipped) the columns are
+        ``ID``, ``curv_mean``, ``curv_median``, ``length_mean``,
+        ``length_median`` and ``hair_count``. With ``test=True``, the per-hair
+        table described above.
     """
     from ..utils.filesystem import make_subdirectory
     
@@ -371,11 +381,60 @@ def window_iter(
             }
         )
 
-        return im_sumdf
+        if test:
+            return within_im_curvdf2
+        else:
+            return im_sumdf
 
-    else:
-        logger.warning("Window size is None, returning empty DataFrame")
-        return pd.DataFrame()
+    elif window_size is None:
+        # Whole-hair mode: fit a single Taubin circle to each hair.
+        window_size_px = None
+        within_element = None
+        minsize = 0.5 * resolution
+        tempdf = [
+            analyze_each_curv(
+                hair, window_size_px, resolution, output_path, name, within_element
+            )
+            for hair in props
+            if hair.area > minsize
+        ]
+
+        if tempdf:
+            within_im_curvdf = pd.concat(tempdf)
+        else:
+            # No hair longer than minsize: report an empty table (NaN means,
+            # hair_count 0), as the window-size branch does, instead of
+            # letting pd.concat raise "No objects to concatenate".
+            within_im_curvdf = pd.DataFrame(columns=["curv", "length"], dtype=float)
+
+        within_im_curvdf2 = within_im_curvdf.dropna()
+
+        output_path = make_subdirectory(output_path, append_name="analysis")
+        save_path = pathlib.Path(output_path) / f"ImageSum_{name}.csv"
+        within_im_curvdf2.to_csv(save_path)
+        logger.debug(f"Saved image summary to {save_path}")
+
+        im_mean = within_im_curvdf2["curv"].mean()
+        im_median = within_im_curvdf2["curv"].median()
+        length_mean = within_im_curvdf2["length"].mean()
+        length_median = within_im_curvdf2["length"].median()
+        hair_count = len(within_im_curvdf2.index)
+
+        im_sumdf = pd.DataFrame(
+            {
+                "ID": name,
+                "curv_mean": [im_mean],
+                "curv_median": [im_median],
+                "length_mean": [length_mean],
+                "length_median": [length_median],
+                "hair_count": [hair_count],
+            }
+        )
+
+        if test:
+            return within_im_curvdf2
+        else:
+            return im_sumdf
 
 
 # ---------------------------------------------------------------------------

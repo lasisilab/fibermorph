@@ -33,10 +33,12 @@ def curvature_seq(
     input_file          : path to the input image
     output_path         : output directory
     resolution          : pixels per mm
-    window_size         : window size for Taubin fit (scalar or list for sweep)
+    window_size         : window size for Taubin fit (scalar or list for sweep);
+                          None fits one circle to each whole hair
     window_unit         : 'px' or 'mm'
     save_img            : save intermediate images
-    test                : running under test suite (skips some I/O)
+    test                : validation run: return the per-hair table (one row per
+                          hair) instead of the image summary
     within_element      : save per-hair curvature CSV distributions
     use_clahe           : CLAHE preprocessing (improved contrast handling)
     extended_curvature  : compute curl_index, curl_index_std, wave_count,
@@ -44,7 +46,15 @@ def curvature_seq(
 
     Returns
     -------
-    pd.DataFrame — curvature summary (one row per image / window size)
+    pd.DataFrame
+        With ``test=False``, the curvature summary (one row per image / window
+        size; columns ``ID``, ``curv_mean_mean``, ``curv_mean_median``,
+        ``curv_median_mean``, ``curv_median_median``, ``length_mean``,
+        ``length_median``, ``hair_count``). With ``window_size=None`` the
+        columns are ``ID``, ``curv_mean``, ``curv_median``, ``length_mean``,
+        ``length_median``, ``hair_count``. With ``test=True``, the per-hair
+        table (columns ``curv_mean``, ``curv_median``, ``length`` for a window
+        size; ``curv``, ``length`` for the whole-hair mode).
     """
     from ..core.filters import filter_curv, filter_curv_clahe
     from ..processing.binary import binarize_curv, remove_particles
