@@ -1,8 +1,8 @@
 """Tests for the fibermorph command line (fibermorph.cli).
 
-Covers how ``--window_size`` is parsed and validated, how out-of-range values
-of ``--jobs``, the resolutions and the section size limits are refused, and
-runs the real entry point (``fibermorph.cli.main`` and ``python -m
+Covers how ``--window_size`` is parsed and validated (including the longest
+window accepted), how out-of-range values of ``--jobs``, the resolutions and
+the section size limits are refused, and runs the real entry point (``fibermorph.cli.main`` and ``python -m
 fibermorph``) on a small synthetic curvature image.
 
 Before ``--window_size`` was parsed as a number, its values reached the
@@ -22,7 +22,7 @@ from PIL import Image
 import fibermorph
 from fibermorph import cli
 from fibermorph.analysis.curvature_pipeline import curvature_seq
-from fibermorph.cli import normalize_window_sizes, parse_args
+from fibermorph.cli import MAX_WINDOW_PX, normalize_window_sizes, parse_args
 
 SYNTHETIC_IMAGE = (
     pathlib.Path(__file__).parent / "test_data" / "curv_golden" / "synthetic_curv.png"
@@ -215,6 +215,101 @@ class TestNumericOptions:
         err = _parse_error(capsys, *extra, base=["--section", "-i", "in_dir", "-o", "out_dir"])
         assert message in err
         assert "Traceback" not in err
+
+
+class TestWindowSizeLimit:
+    """A window longer than MAX_WINDOW_PX pixels is refused, in px or after mm conversion.
+
+    Before the limit, ``--window_size 1e307`` with mm (or a huge resolution)
+    ended in ``OverflowError: cannot convert float infinity to integer``, and
+    ``--window_size 1e300`` with px in ``OSError: File name too long``.
+    """
+
+    def test_the_limit(self):
+        assert MAX_WINDOW_PX == 1_000_000_000
+
+    def test_largest_px_window_is_accepted(self):
+        assert _window_size("--window_size", "1000000000") == [10**9]
+
+    def test_px_window_just_over_the_limit_is_rejected(self, capsys):
+        err = _parse_error(capsys, "--window_size", "1000000001")
+        assert "argument --window_size:" in err
+        assert "largest window allowed (1,000,000,000 pixels)" in err
+
+    @pytest.mark.parametrize("text", ["1e10", "1e20", "1e200", "1e300", "1.7976931348623157e308"])
+    def test_huge_px_windows_are_rejected(self, capsys, text):
+        err = _parse_error(capsys, "--window_size", text)
+        assert "argument --window_size:" in err and "largest window allowed" in err
+        assert "Traceback" not in err
+
+    def test_largest_mm_window_is_accepted(self):
+        value = _window_size(
+            "--window_size", "1000000000", "--window_unit", "mm", "--resolution_mm", "1"
+        )
+        assert value == [1e9]
+
+    def test_mm_window_just_over_the_limit_is_rejected(self, capsys):
+        err = _parse_error(
+            capsys, "--window_size", "1000000001", "--window_unit", "mm", "--resolution_mm", "1"
+        )
+        assert "argument --window_size:" in err and "largest window allowed" in err
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            # 1e307 mm * 132 px/mm is infinite
+            ["--window_size", "1e307", "--window_unit", "mm"],
+            # a finite resolution that still overflows the product
+            ["--window_size", "10", "--window_unit", "mm", "--resolution_mm", "1e308"],
+            # finite but over the limit: 1e8 mm * 132 px/mm = 1.32e10 px
+            ["--window_size", "1e8", "--window_unit", "mm"],
+        ],
+    )
+    def test_huge_mm_windows_are_rejected(self, capsys, extra):
+        err = _parse_error(capsys, *extra)
+        assert "argument --window_size:" in err and "largest window allowed" in err
+        assert "Traceback" not in err
+
+    def test_mm_message_gives_the_length_in_pixels_and_the_resolution(self, capsys):
+        err = _parse_error(
+            capsys, "--window_size", "1e8", "--window_unit", "mm", "--resolution_mm", "132"
+        )
+        assert "1e+08 mm is 1.32e+10 pixels at --resolution_mm 132 px_per_mm" in err
+
+    def test_mm_window_is_converted_with_a_mm_per_px_resolution(self, capsys):
+        # 0.0076 mm per pixel is 131.58 pixels per mm: 100 mm is about 13 158 px
+        args = parse_args(
+            BASE
+            + "--window_size 100 --window_unit mm --resolution_mm 0.0076".split()
+            + ["--resolution_mm_units", "mm_per_px"]
+        )
+        assert args.window_size == [100.0]
+        # 1e8 mm at 0.001 mm per pixel is 1e11 px
+        err = _parse_error(
+            capsys, "--window_size", "1e8", "--window_unit", "mm", "--resolution_mm", "0.001",
+            "--resolution_mm_units", "mm_per_px",
+        )
+        assert "mm_per_px" in err and "largest window allowed" in err
+
+    def test_one_long_window_in_a_sweep_rejects_the_lot(self, capsys):
+        err = _parse_error(capsys, "--window_size", "25", "1e300")
+        assert "largest window allowed" in err
+
+    def test_checked_whichever_module_is_chosen(self, capsys):
+        err = _parse_error(
+            capsys, "--window_size", "1e300", base=["--section", "-i", "in_dir", "-o", "out_dir"]
+        )
+        assert "largest window allowed" in err
+
+    def test_a_bad_resolution_is_reported_first(self, capsys):
+        err = _parse_error(
+            capsys, "--window_size", "1e307", "--window_unit", "mm", "--resolution_mm", "0"
+        )
+        assert "argument --resolution_mm:" in err
+
+    def test_no_window_size_is_not_affected_by_a_huge_resolution(self):
+        args = parse_args(["--section", "-i", "in_dir", "-o", "out_dir", "--resolution_mm", "1e308"])
+        assert args.window_size is None
 
 
 class TestNormalizeWindowSizes:
@@ -421,6 +516,13 @@ def test_module_run_with_a_mm_window(image_dir, tmp_path):
         (["--window_size", "50.5"], "whole number"),
         (["--window_size", "-1"], "greater than 0"),
         (["--window_size", "wide"], "invalid window size"),
+        # both used to end in a traceback after the output directory was made
+        (["--window_unit", "mm", "--window_size", "1e307"], "largest window allowed"),
+        (["--window_size", "1e300"], "largest window allowed"),
+        (
+            ["--window_unit", "mm", "--window_size", "10", "--resolution_mm", "1e308"],
+            "largest window allowed",
+        ),
     ],
 )
 def test_module_run_reports_bad_window_size_without_a_traceback(
@@ -435,6 +537,21 @@ def test_module_run_reports_bad_window_size_without_a_traceback(
     assert "Traceback" not in result.stderr
     assert "--window_size" in result.stderr and message in result.stderr
     assert not out_dir.exists()
+
+
+def test_module_run_accepts_the_largest_window(image_dir, tmp_path):
+    # no hair is that long, so nothing is measured; the run itself still works
+    out_dir = tmp_path / "out"
+    result = _module_run(
+        "--curvature", "-i", str(image_dir), "-o", str(out_dir),
+        "--resolution_mm", str(RESOLUTION), "--window_size", str(MAX_WINDOW_PX),
+    )
+
+    assert result.returncode == 0, result.stderr
+    (summary,) = out_dir.glob("*_fibermorph_curvature/curvature_summary_data_*.csv")
+    table = pd.read_csv(summary)
+    assert list(table["ID"]) == [f"synthetic_curv_WindowSize-{MAX_WINDOW_PX}px"]
+    assert list(table["hair_count"]) == [0]
 
 
 @pytest.mark.parametrize(

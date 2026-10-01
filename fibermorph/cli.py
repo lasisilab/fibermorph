@@ -7,6 +7,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Longest ``--window_size`` accepted, in pixels (see check_window_pixel_size).
+MAX_WINDOW_PX = 1_000_000_000
+
 
 def _window_size_value(text):
     """Parse one ``--window_size`` value: a number, or ``none`` for the whole hair.
@@ -150,6 +153,60 @@ def check_numeric_options(args):
         )
 
 
+def check_window_pixel_size(args):
+    """Reject a ``--window_size`` that is too many pixels long to be real.
+
+    :func:`normalize_window_sizes` only checks that each window is a finite
+    number greater than 0. A very large one still fails later: with ``mm`` the
+    curvature code computes ``int(window_size * resolution)``, which raises
+    ``OverflowError`` once the product is infinite (``--window_size 1e307``),
+    and with ``px`` the digits of a huge whole number go into the output file
+    name, which the operating system refuses as too long (``--window_size
+    1e300``). Every window is therefore limited to ``MAX_WINDOW_PX`` pixels,
+    after conversion with ``--resolution_mm`` for ``mm``; no image has a hair
+    that long.
+
+    Call it after :func:`check_numeric_options`, which makes sure that
+    ``--resolution_mm`` is a finite number greater than 0.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed arguments whose ``window_size`` has been normalized (None, or a
+        list of ints for ``px`` / floats for ``mm``).
+
+    Raises
+    ------
+    ValueError
+        With a message that starts "argument --window_size:" if a window is
+        longer than ``MAX_WINDOW_PX`` pixels, or so long that its length in
+        pixels is infinite.
+    """
+    from .utils.units import resolution_to_px_per_unit
+
+    if args.window_size is None:
+        return
+
+    if args.window_unit == "mm":
+        px_per_mm = resolution_to_px_per_unit(args.resolution_mm, args.resolution_mm_units)
+
+    for value in args.window_size:
+        if args.window_unit == "px":
+            if value > MAX_WINDOW_PX:
+                raise ValueError(
+                    f"argument --window_size: {value:g} px is longer than the largest "
+                    f"window allowed ({MAX_WINDOW_PX:,} pixels)"
+                )
+        else:
+            window_px = value * px_per_mm
+            if window_px > MAX_WINDOW_PX:
+                raise ValueError(
+                    f"argument --window_size: {value:g} mm is {window_px:g} pixels at "
+                    f"--resolution_mm {args.resolution_mm:g} {args.resolution_mm_units}, "
+                    f"longer than the largest window allowed ({MAX_WINDOW_PX:,} pixels)"
+                )
+
+
 def parse_args(argv=None):
     """Parse command-line arguments.
 
@@ -163,7 +220,8 @@ def parse_args(argv=None):
     argparse.Namespace
         Parser argument namespace. ``window_size`` is None (fit the whole hair)
         or a list of window sizes: ints for ``--window_unit px``, floats for
-        ``mm``. Out-of-range ``--window_size``, ``--jobs``, ``--resolution_mm``,
+        ``mm``. Out-of-range ``--window_size`` (including one longer than
+        ``MAX_WINDOW_PX`` pixels), ``--jobs``, ``--resolution_mm``,
         ``--resolution_mu``, ``--minsize`` and ``--maxsize`` values stop the
         parser with exit code 2, whichever module is chosen.
     """
@@ -245,8 +303,9 @@ def parse_args(argv=None):
         "each value must be a whole number (50 or 50.0); with mm it can be any number "
         "greater than 0 (0.5). A window shorter than 10 pixels (for mm, after conversion "
         "with --resolution_mm) is not used: each hair is measured over its whole length "
-        "in one window, with a warning. If nothing is entered, or the value is 'none', the "
-        "default is None and the entire hair will be used for the curve fitting.",
+        "in one window, with a warning. A window longer than 1,000,000,000 pixels is "
+        "refused. If nothing is entered, or the value is 'none', the default is None and "
+        "the entire hair will be used for the curve fitting.",
     )
 
     gr_curv.add_argument(
@@ -426,9 +485,11 @@ def parse_args(argv=None):
     except ValueError as exc:
         parser.error(f"argument --window_size: {exc}")
 
-    # Other numeric options: --jobs, resolutions and section size limits
+    # Other numeric options: --jobs, resolutions and section size limits; then
+    # the window length in pixels, which needs a valid resolution
     try:
         check_numeric_options(args)
+        check_window_pixel_size(args)
     except ValueError as exc:
         parser.error(str(exc))
 

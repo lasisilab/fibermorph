@@ -47,14 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fibermorph-gui` to change it, and the startup notice then warns that the app is
   reachable from other machines. An empty `--server.address=` counts as changing
   it: Streamlit then listens on every interface, and the notice says so.
-- **A zero or negative `--window_size` now stops with an error.**
+- **A zero, negative or absurdly long `--window_size` now stops with an error.**
   With `--window_unit px`, a zero or negative `--window_size` used to run: the
   log said `less than 10 pixels, using full length` and every hair was measured
   over its whole length. It now exits with code 2 and a usage message before any
   analysis starts, whichever module is chosen. Use a window of 10 pixels or more,
   or `--window_size none` (or leave the option out) to fit whole hairs. A script
   that writes such a value, for example one downloaded from the Run Remote view
-  with a "Taubin window (px)" of 0 or less, needs a positive window.
+  with a "Taubin window (px)" of 0 or less, needs a positive window. A window
+  longer than 1,000,000,000 pixels (for `mm`, after conversion with
+  `--resolution_mm`) is refused in the same way: no image has a hair that long.
+  Such a window used to run and measure nothing (`hair_count` 0), or, when it
+  was extremely long, end in a traceback (`OverflowError: cannot convert float
+  infinity to integer` or `OSError: File name too long`).
 - **A negative `--minsize` now stops with an error.**
   `fibermorph --section --minsize -5` used to run, the negative value acting
   as a lower bound of 0. It now exits with code 2 and a usage message before
@@ -194,7 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   give 50); with `mm` it can be any number greater than 0 (`0.5`). A
   non-numeric or non-finite value, a fraction of a pixel with `px`, or `none`
   repeated or combined with numbers is reported as a usage error (exit code 2)
-  instead of a traceback; zero and negative windows are covered under
+  instead of a traceback; zero, negative and over-long windows (more than
+  1,000,000,000 pixels, the largest accepted) are covered under
   **Breaking Changes**. A window shorter than 10 pixels (for `mm`, after
   conversion with `--resolution_mm`) is not used as given: each hair is
   measured over its whole length in one window, a warning is logged, and the
