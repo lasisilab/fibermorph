@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   console (brand lockup, grouped nav with SVG glyphs, status footer), per-view
   headers, at-a-glance metric cards, and brand-colored charts.
 - Help text for the Taubin window and CLAHE controls in the GUI.
+- **Golden curvature tests** (`fibermorph/test/test_curvature_golden.py`) that
+  compare per-hair and summary curvature against output of the original v0.3.1
+  code (scikit-image 0.16.2) for a window in px, a window in mm and the
+  whole-hair mode, with the default options (no CLAHE, no extended curvature).
+  They run offline on a small synthetic image; a second set downloads the two
+  lab demo curvature images (about 6 MB, fetched once per test run) and is
+  skipped if the download fails (or reads them from
+  `FIBERMORPH_DEMO_CURV_DIR`). The references and the script that made them are
+  in `fibermorph/test/test_data/curv_golden/`.
 
 ### Changed
 - **GUI is now a sidebar console** with four views — **Cross-Section**,
