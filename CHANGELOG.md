@@ -47,6 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fibermorph-gui` to change it, and the startup notice then warns that the app is
   reachable from other machines. An empty `--server.address=` counts as changing
   it: Streamlit then listens on every interface, and the notice says so.
+- **Curvature has one method: CLAHE preprocessing and extended curvature are
+  removed.** `--use-clahe` and `--extended-curvature` now stop with an error
+  (exit status 2), the `use_clahe` / `extended_curvature` parameters are gone,
+  the `curl_index`, `curl_index_std`, `wave_count`, `wave_count_per_mm` and
+  `length_total` columns of the `curvature_seq` / batch output are gone (the
+  GUI's own "Total Length (mm)" column stays), and `run_batch` /
+  `workflows.batch` curvature output now uses the original method instead of
+  the medial-axis path. The old batch values varied from run to run and cannot
+  be reproduced exactly, so batch curvature results made before this change
+  should be re-run. SBATCH scripts made earlier by the GUI's Run Remote view
+  (which turned extended curvature on by default) contain
+  `--extended-curvature` and must have it deleted. Details are in **Removed**
+  below.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
@@ -77,14 +90,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lasisi Lab GUI design system** (`fibermorph.gui.styles`): a left sidebar
   console (brand lockup, grouped nav with SVG glyphs, status footer), per-view
   headers, at-a-glance metric cards, and brand-colored charts.
-- Help text for the Taubin window and CLAHE controls in the GUI.
+- Help text for the Taubin window control in the GUI.
 - **Golden curvature tests** (`fibermorph/test/test_curvature_golden.py`) that
   compare per-hair and summary curvature against output of the original v0.3.1
   code (scikit-image 0.16.2) for a window in px, a window in mm and the
-  whole-hair mode, with the default options (no CLAHE, no extended curvature).
-  They run offline on a small synthetic image; a second set downloads the two
-  lab demo curvature images (about 6 MB, fetched once per test run) and is
-  skipped if the download fails (or reads them from
+  whole-hair mode. They run offline on a small synthetic image; a second set
+  downloads the two lab demo curvature images (about 6 MB, fetched once per
+  test run) and is skipped if the download fails (or reads them from
   `FIBERMORPH_DEMO_CURV_DIR`). The references and the script that made them are
   in `fibermorph/test/test_data/curv_golden/`.
 
@@ -102,8 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generic placeholders; it does not submit or monitor jobs and no longer bakes in
   personal account/partition/path defaults.
 - **Curvature output refocused.** Fragment-level length + mean/median curvature
-  are the primary output; the v2 extended metrics (curl index, wave count) moved
-  behind an off-by-default "extended (experimental)" toggle.
+  are the primary output.
 - **Per-image analysis only.** Filename parsing and per-sample grouping removed;
   each result row records only its `source_file`.
 - `fibermorph-gui` seeds an empty Streamlit credentials file on first run
@@ -112,13 +123,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Curvature diameter metric** (`diameter_mean_mu`, `diameter_cv`) and its
   medial-axis distance-map computation — a v2 fork addition that is not yet
-  validated. The medial-axis skeleton used by the curl-index path is unchanged.
+  validated.
+- **CLAHE preprocessing and extended curvature metrics for curvature.**
+  Curvature analysis now has exactly one method, the published fibermorph
+  method (v0.3.1): Frangi ridge filter (the scikit-image 0.16.2 version) ->
+  binarize -> remove particles -> skeletonize -> prune -> Taubin circle fits.
+  Neither option was part of it.
+  - What was removed: `filter_curv_clahe` (CLAHE, then the installed
+    scikit-image Frangi filter, then an Otsu threshold computed only on the
+    middle 70% of the image, ignoring the top and bottom 15%); the medial-axis
+    skeleton path; `curl_index_from_skeleton`, `wave_count` and their helper
+    `pixel_length_correction_coords`; the output columns `curl_index`,
+    `curl_index_std`, `wave_count`, `wave_count_per_mm` and `length_total`;
+    the `use_clahe` and `extended_curvature` parameters of `curvature_seq`,
+    `workflows.curvature`, `workflows.batch` and `run_batch`; the CLI flags
+    `--use-clahe` and `--extended-curvature`. In the GUI: the "CLAHE
+    preprocessing" toggle (Curvature and Run Remote views), the "Show extended
+    (experimental) metrics" toggle with the Curl Index, Wave Count and
+    Waves/mm columns of the Curvature summary, and the Run Remote "Extended
+    curvature metrics" switch. The GUI's per-image "Total Length (mm)"
+    (`length_total` in the downloaded CSV) stays: the app sums the fragment
+    lengths itself and it never came from the removed pipeline column.
+  - Why: neither option was validated against the published method. CLAHE
+    used the installed scikit-image's Frangi filter, so its output changed with
+    the scikit-image version, and it ignored the top and bottom 15% of the
+    image. The extended path replaced `skeletonize` with `medial_axis`, which
+    breaks ties at random, so repeated runs on the same image could differ.
+  - Scripts that still use the flags: `--use-clahe` and `--extended-curvature`
+    remain accepted by the parser but are hidden from `--help`. A command that
+    includes either stops before doing any work with exit status 2 and a
+    message saying the option was removed because it is not part of the
+    published curvature method. SBATCH scripts generated earlier by the GUI's
+    Run Remote view usually contain `--extended-curvature` (its switch was on
+    by default); delete the flag from them. Python code that passes
+    `use_clahe=` or `extended_curvature=` gets a `TypeError`, and importing a
+    removed function fails.
+  - Batch curvature output changes: `run_batch` and `workflows.batch`
+    defaulted `extended_curvature` to `True`, as did the Run Remote switch, so
+    batch curvature (the curvature rows of `hair_analysis_per_image.csv`) came
+    from the medial-axis skeleton and carried the five extra columns. It now
+    uses the original method: the extra columns are gone and the values change
+    to the published ones. The old batch values were not reproducible, because
+    `medial_axis` breaks ties at random: on the synthetic test image (50 px
+    window, 132 px/mm) `curv_mean_mean` came out between about 0.80 and 0.82
+    from one run to the next, and is now 0.8024 on every run, the v0.3.1
+    value. Batch curvature results produced before this change cannot be
+    reproduced exactly and should be re-run. `workflows.curvature`,
+    `curvature_seq` and the command line defaulted to off, so their default
+    results are unchanged.
 - **Per-sample batch aggregation** (`hair_analysis_per_sample.csv`); the batch
   pipeline now emits a single per-image table.
 
 ### Fixed
-- **Curvature with the default options now reproduces the original published
-  method (v0.3.1) whichever scikit-image is installed.** The ridge-detection
+- **Curvature now reproduces the original published method (v0.3.1) whichever
+  scikit-image is installed.** The ridge-detection
   step called `skimage.filters.frangi`, whose output changed after scikit-image
   0.16.2 (default `gamma` 15 → computed from the image, and changes to the
   Hessian computation), so the same fibermorph code gave different curvature on
@@ -132,16 +190,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches scikit-image 0.16.2 to about 1e-16. **Curvature values differ from
   those produced by 0.3.x and 1.0.x releases or by the unreleased 2.0.0 code on newer
   scikit-image** (they now agree with the original published values).
-  "Default options" means no CLAHE and no extended curvature. Two options are
-  not the v0.3.1 method and do not reproduce it: CLAHE (`--use-clahe`,
-  `filter_curv_clahe`) still uses the installed scikit-image, and extended
-  curvature (`--extended-curvature`, `extended_curvature=True`) builds the
-  skeleton with a medial axis instead of v0.3.1's skeletonize (and the medial
-  axis breaks ties at random, so repeated runs differ slightly from each
-  other). Extended curvature is the default of `run_batch`,
-  `workflows.batch` and of the "Extended curvature metrics" switch in the
-  GUI's SLURM script builder, so batch runs started with those defaults also
-  differ from v0.3.1.
+  This now holds for every entry point, including `run_batch`,
+  `workflows.batch` and the GUI: the two options that did not reproduce
+  v0.3.1 (CLAHE and extended curvature) are removed, see **Removed**.
 - **Whole-hair curvature mode and per-hair `test` output restored.** The
   refactor first released in 0.3.7 dropped two behaviors of the original `window_iter`
   (`fibermorph.core.curvature`): (1) with `window_size=None` (the CLI default

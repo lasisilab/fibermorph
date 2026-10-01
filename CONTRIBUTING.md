@@ -35,7 +35,7 @@ fibermorph-gui --local       # launch the GUI locally (without --local: hosted m
 - **Target `fibermorph-dev`.**
 - Use a **Conventional Commits** PR title — the `title-format` CI check requires
   one. Start with a type: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
-  `chore:`, `ci:`, etc. Example: `feat: validate wave-count on synthetic fibers`.
+  `chore:`, `ci:`, etc. Example: `fix: handle an empty curvature directory`.
 - Make sure `pytest` passes before requesting review.
 
 ## Test data
