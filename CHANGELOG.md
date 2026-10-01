@@ -167,6 +167,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured on its own; `source_file` (and the `ID` / `mask_filename` columns of
   cross-section results, the mask previews, the curvature tables and the error
   messages shown for a file) still show the uploaded filename.
+- **`fibermorph --curvature --window_size` no longer crashes.** The values were
+  read as text (the same bug is in the original v0.3.1 command line), so
+  `--window_unit mm` failed with `TypeError: can't multiply sequence by non-int
+  of type 'float'`, and `--window_size 50.0` with `--window_unit px` failed with
+  `ValueError: invalid literal for int()`; only whole numbers of pixels such as
+  `50` worked, by accident. `--window_size` is now read as numbers: one or more
+  values (a sweep such as `--window_size 25 50 100`), or `none` for the whole
+  hair, which is also the default when the option is left out. With
+  `--window_unit px` each value must be a whole number (`50` and `50.0` both
+  give 50); with `mm` it can be any number greater than 0 (`0.5`). A zero,
+  negative or non-numeric value, a fraction of a pixel, or `none` combined
+  with numbers is reported as a usage error (exit code 2) instead of a
+  traceback. Output file names are unchanged (`..._WindowSize-50px`,
+  `..._WindowSize-0.5mm`). `fibermorph.cli.main` and `parse_args` now accept an
+  optional list of arguments (default: the command line).
 
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the

@@ -265,8 +265,12 @@ To calculate curvature from grayscale TIFF images of fibers, the flag `--curvatu
 --window_size  [ ...] 	Float or integer or None. Desired size for
 						window of measurement
 						for curvature analysis in pixels or mm (given
-						the flag --window_unit). If nothing is entered, the default
-						is None and the entire fiber will be used to for the curve fitting."
+						the flag --window_unit). Give several values
+						(e.g. 25 50 100) to measure each window size in turn.
+						With px each value must be a whole number (50 or 50.0);
+						with mm it can be any number greater than 0 (0.5).
+						If nothing is entered, or the value is 'none', the default
+						is None and the entire fiber will be used for the curve fitting.
 --window_unit {px,mm}	String. Unit of measurement for window of
 						measurement for curvature
                       	analysis. Can be 'px' (pixels) or 'mm'. Default is 'px'.
