@@ -115,9 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
   Cross-Section view's settings, the "SAM2 checkpoint path" text box is now shown
   only in local mode. In hosted mode the server's own checkpoint (`SAM2_CHECKPOINT`,
-  or the packaged default path) is always used, and a caption says whether one is
-  configured, without showing the server path. Before, any visitor could type a
-  path and the server would try to load that file as a model. The server's
+  or the packaged default path) is always used, and a caption says whether a
+  checkpoint file was found (and that SAM2 also needs a GPU on the server), without
+  showing the server path. Before, any visitor could type a path and the server
+  would try to load that file as a model. The server's
   checkpoint path is not shown in any hosted view: the Run Remote view's
   "SAM2 checkpoint path" box, which only fills in the generated SBATCH script text
   and is never loaded by the server, now starts empty in hosted mode (in local mode

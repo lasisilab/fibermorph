@@ -469,10 +469,14 @@ if _view == "section":
             # Hosted: visitors must not choose which file the server loads as a
             # model, so use the server-configured checkpoint and don't show its path.
             sec_ckpt = _DEFAULT_CHECKPOINT
+            # Only the checkpoint file is checked here; SAM2 also needs the sam2
+            # package and a CUDA GPU on the server, and without them the app
+            # uses watershed whatever the checkpoint says.
             st.caption(
-                "SAM2 checkpoint: configured on this server."
+                "SAM2 checkpoint: file found on this server. SAM2 also needs a "
+                "GPU on the server; without one the app uses watershed."
                 if os.path.isfile(sec_ckpt) else
-                "SAM2 checkpoint: none configured on this server, so SAM2 "
+                "SAM2 checkpoint: no file found on this server, so SAM2 "
                 "segmentation falls back to watershed."
             )
 

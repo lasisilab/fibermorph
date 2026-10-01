@@ -124,24 +124,28 @@ def test_local_has_sam2_checkpoint_text_input(monkeypatch, tmp_path):
     assert boxes[0].value == str(ckpt)
 
 
-def test_hosted_caption_says_checkpoint_is_configured_without_showing_path(monkeypatch, tmp_path):
+def test_hosted_caption_says_checkpoint_is_found_without_showing_path(monkeypatch, tmp_path):
     ckpt = tmp_path / "private_model_dir" / "model.pt"
     ckpt.parent.mkdir()
     ckpt.write_bytes(b"x")
     at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(ckpt)})
     captions = [c.value for c in at.caption if c.value.startswith("SAM2 checkpoint")]
     assert len(captions) == 1
-    assert "configured on this server" in captions[0]
-    assert "none configured" not in captions[0]
+    assert "file found on this server" in captions[0]
+    assert "no file found" not in captions[0]
+    # A checkpoint file alone does not make SAM2 usable: the caption says a GPU
+    # is needed too, so it does not promise SAM2 where only a file exists.
+    assert "GPU" in captions[0] and "watershed" in captions[0]
     assert not [t for t in _rendered_text(at) if "private_model_dir" in t]
 
 
-def test_hosted_caption_says_when_no_checkpoint_is_configured(monkeypatch, tmp_path):
+def test_hosted_caption_says_when_no_checkpoint_file_is_found(monkeypatch, tmp_path):
     missing = tmp_path / "private_model_dir" / "absent.pt"
     at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(missing)})
     captions = [c.value for c in at.caption if c.value.startswith("SAM2 checkpoint")]
     assert len(captions) == 1
-    assert "none configured" in captions[0]
+    assert "no file found" in captions[0]
+    assert "watershed" in captions[0]
     assert "private_model_dir" not in captions[0]
 
 
