@@ -163,7 +163,6 @@ def _process_curvature_gui(
     tmp_path: str,
     resolution_mm: float,
     window_size: int,
-    use_clahe: bool = False,
     extended: bool = False,
 ):
     """Run curvature analysis on a single image.
@@ -190,7 +189,6 @@ def _process_curvature_gui(
             save_img=False,
             test=False,
             within_element=False,
-            use_clahe=use_clahe,
             extended_curvature=extended,
         )
         if df is None or (hasattr(df, "empty") and df.empty):
@@ -654,7 +652,7 @@ elif _view == "curvature":
     curv_source = _render_input_picker("curvature", "curv")
 
     with st.expander("Settings", expanded=False):
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         curv_res_val  = c1.number_input(
             "Resolution", value=132.0, step=1.0, min_value=0.0001, key="curv_res_val",
             help="Enter your scale in whichever unit you have; pick the matching "
@@ -666,11 +664,6 @@ elif _view == "curvature":
                  "to the fiber (Taubin method) and measure local curvature at each "
                  "step along it. Larger = smoother, more global curvature; smaller "
                  "= more local detail. Keep it well below your fragment length.")
-        curv_clahe    = c4.toggle(
-            "CLAHE preprocessing", value=False, key="curv_clahe",
-            help="Contrast-Limited Adaptive Histogram Equalization: boosts local "
-                 "contrast before fibers are detected. Helps when illumination is "
-                 "uneven across the image; may add noise on already-clean images.")
         curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
         curv_ext = st.toggle(
@@ -698,7 +691,6 @@ elif _view == "curvature":
                             path,
                             resolution_mm=float(curv_res_mm),
                             window_size=int(curv_window),
-                            use_clahe=bool(curv_clahe),
                             extended=bool(curv_ext),
                         )
                     except Exception as e:
@@ -976,7 +968,7 @@ elif _view == "remote":
         )
 
     with st.expander("Curvature settings", expanded=False):
-        col5, col6, col7, col8 = st.columns(4)
+        col5, col6, col7 = st.columns(3)
         curv_res_val_b  = col5.number_input(
             "Curvature resolution", value=132.0, step=1.0, min_value=0.0001,
             key="batch_curv_res_val")
@@ -987,11 +979,6 @@ elif _view == "remote":
                  "to the fiber (Taubin method) and measure local curvature. Larger "
                  "= smoother/more global; smaller = more local detail. Keep it well "
                  "below your fragment length.")
-        use_clahe       = col8.toggle(
-            "CLAHE preprocessing", value=False,
-            help="Contrast-Limited Adaptive Histogram Equalization: boosts local "
-                 "contrast before fibers are detected. Helps with uneven "
-                 "illumination; may add noise on already-clean images.")
         resolution_mm   = resolution_to_px_per_unit(curv_res_val_b, curv_res_unit_b)
         st.caption(f"Script will pass **--resolution_mm {resolution_mm:.4g}** (px/mm).")
         ext_curvature = st.toggle(
@@ -1058,8 +1045,6 @@ elif _view == "remote":
                     f"    --window_size {int(window_size)}",
                     f"    --jobs {int(slurm_cpus)}",
                 ]
-                if use_clahe:
-                    curv_flags.append("    --use-clahe")
                 if ext_curvature:
                     curv_flags.append("    --extended-curvature")
                 commands.append(" \\\n".join(curv_flags))

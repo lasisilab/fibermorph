@@ -41,7 +41,7 @@ try:
         extract_features_from_array,
         classify_shape,
     )
-    from .core.filters import filter_curv, filter_curv_clahe
+    from .core.filters import filter_curv
     from .processing.binary import check_bin, binarize_curv, remove_particles
     from .processing.morphology import skeletonize, prune, diag
     from .processing.geometry import (
@@ -99,7 +99,6 @@ __all__ = [
     "classify_shape",
     # Filters
     "filter_curv",
-    "filter_curv_clahe",
     # Processing
     "check_bin",
     "binarize_curv",

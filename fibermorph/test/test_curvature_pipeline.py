@@ -1,4 +1,4 @@
-"""Unit tests for analysis.curvature_pipeline (CLAHE path, extended curvature)."""
+"""Unit tests for analysis.curvature_pipeline (extended curvature)."""
 
 import os
 
@@ -22,7 +22,7 @@ def _make_curv_tiff(tmp_path, fname: str = "test_curv.tiff",
 
 
 class TestCurvatureSeq:
-    """Tests for curvature_seq (standard and CLAHE paths, extended output)."""
+    """Tests for curvature_seq (standard and extended output)."""
 
     def test_returns_dataframe(self, tmp_path):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
@@ -31,7 +31,7 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
+            extended_curvature=False,
         )
         import pandas as pd
         assert result is not None
@@ -44,22 +44,10 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
+            extended_curvature=False,
         )
         if df is not None and not df.empty:
             assert any(c in df.columns for c in ["curv_mean", "mean", "median"])
-
-    def test_clahe_path_runs_without_error(self, tmp_path):
-        from fibermorph.analysis.curvature_pipeline import curvature_seq
-        img_path = _make_curv_tiff(tmp_path)
-        result = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=True, extended_curvature=False,
-        )
-        import pandas as pd
-        assert result is None or isinstance(result, pd.DataFrame)
 
     def test_extended_curvature_adds_curl_index(self, tmp_path):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
@@ -68,7 +56,7 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=True,
+            extended_curvature=True,
         )
         if df is not None and not df.empty:
             assert "curl_index" in df.columns, "Extended curvature must include curl_index"
@@ -80,7 +68,7 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=True,
+            extended_curvature=True,
         )
         if df is not None and not df.empty:
             assert "wave_count" in df.columns, "Extended curvature must include wave_count"
@@ -95,18 +83,41 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
+            extended_curvature=False,
         )
         assert result is None or isinstance(result, pd.DataFrame)
 
-    def test_clahe_plus_extended_combined(self, tmp_path):
+
+class TestRemovedOptions:
+    """CLAHE preprocessing is no longer an option anywhere in the API."""
+
+    @pytest.mark.parametrize("dotted", [
+        "fibermorph.analysis.curvature_pipeline.curvature_seq",
+        "fibermorph.workflows.curvature",
+        "fibermorph.workflows.batch",
+        "fibermorph.pipeline.batch.run_batch",
+    ])
+    def test_functions_have_no_clahe_parameter(self, dotted):
+        import importlib
+        import inspect
+        module_name, func_name = dotted.rsplit(".", 1)
+        func = getattr(importlib.import_module(module_name), func_name)
+        assert "use_clahe" not in inspect.signature(func).parameters
+
+    def test_curvature_seq_rejects_use_clahe(self, tmp_path):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
         img_path = _make_curv_tiff(tmp_path)
-        result = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=True, extended_curvature=True,
-        )
-        import pandas as pd
-        assert result is None or isinstance(result, pd.DataFrame)
+        with pytest.raises(TypeError):
+            curvature_seq(
+                img_path, str(tmp_path),
+                resolution=132, window_size=None, window_unit="px",
+                save_img=False, test=False, within_element=False,
+                use_clahe=True,
+            )
+
+    def test_filter_curv_clahe_is_gone(self):
+        import fibermorph
+        import fibermorph.core.filters as filters
+        assert not hasattr(filters, "filter_curv_clahe")
+        assert not hasattr(fibermorph, "filter_curv_clahe")
+        assert "filter_curv_clahe" not in fibermorph.__all__

@@ -6,9 +6,9 @@ running under scikit-image 0.16.2; see test_data/curv_golden/README.md for
 exactly how. These tests run the current ``curvature_seq`` and require the
 same numbers, for a window in pixels, a window in mm, and the whole-hair
 mode (``window_size=None``), both per hair (``test=True``) and as image
-summary (``test=False``). They use the default options (``use_clahe=False``,
-``extended_curvature=False``); the CLAHE and extended-curvature options are
-not part of the v0.3.1 method and are not compared here.
+summary (``test=False``). They use the default option
+(``extended_curvature=False``); the extended-curvature option is not part of
+the v0.3.1 method and is not compared here.
 
 * TestSyntheticImageGolden: offline, uses a small synthetic PNG kept in the
   repository.

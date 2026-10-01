@@ -219,6 +219,28 @@ def test_script_uses_the_checkpoint_typed_for_the_cluster(monkeypatch, tmp_path,
 
 
 # ---------------------------------------------------------------------------
+# Curvature: only the published method is offered
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("view", ["curvature", "remote"])
+def test_curvature_settings_offer_no_clahe_option(monkeypatch, view):
+    at = _run_app(monkeypatch, local=False, view=view)
+    assert not [t for t in at.toggle if "CLAHE" in t.label]
+
+
+@pytest.mark.parametrize("local", [False, True], ids=["hosted", "local"])
+def test_generated_curvature_script_has_no_removed_flags(monkeypatch, local):
+    at = _run_app(monkeypatch, local=local, view="remote")
+    at.text_input(key="curv_path").set_value("/data/curvature")
+    at.run()
+    _click(at, "gen_sbatch")
+    script = at.session_state["sbatch_script"]
+    assert "fibermorph --curvature" in script
+    assert "--window_size 50" in script
+    assert "--use-clahe" not in script
+
+
+# ---------------------------------------------------------------------------
 # Which checkpoint reaches segment_section
 # ---------------------------------------------------------------------------
 

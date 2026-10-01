@@ -23,7 +23,6 @@ def curvature_seq(
     save_img: bool,
     test: bool,
     within_element: bool,
-    use_clahe: bool       = False,
     extended_curvature: bool = False,
 ) -> pd.DataFrame:
     """Sequence of steps to calculate curvature for a single image.
@@ -40,7 +39,6 @@ def curvature_seq(
     test                : validation run: return the per-hair table (one row per
                           hair) instead of the image summary
     within_element      : save per-hair curvature CSV distributions
-    use_clahe           : CLAHE preprocessing (improved contrast handling)
     extended_curvature  : compute curl_index, curl_index_std, wave_count,
                           wave_count_per_mm, length_total
 
@@ -56,7 +54,7 @@ def curvature_seq(
         table (columns ``curv_mean``, ``curv_median``, ``length`` for a window
         size; ``curv``, ``length`` for the whole-hair mode).
     """
-    from ..core.filters import filter_curv, filter_curv_clahe
+    from ..core.filters import filter_curv
     from ..processing.binary import binarize_curv, remove_particles
     from ..processing.morphology import skeletonize, prune
     from ..core.curvature import (analyze_all_curv,
@@ -74,12 +72,7 @@ def curvature_seq(
             # ----------------------------------------------------------------
             # Step 1 — Filter
             # ----------------------------------------------------------------
-            if use_clahe:
-                filter_img, im_name = filter_curv_clahe(input_file, output_path, save_img)
-                # filter_curv_clahe returns uint8 binary; wrap to float for downstream compat
-                filter_img = filter_img.astype(np.float64) / 255.0
-            else:
-                filter_img, im_name = filter_curv(input_file, output_path, save_img)
+            filter_img, im_name = filter_curv(input_file, output_path, save_img)
             pbar.update(1)
 
             # ----------------------------------------------------------------

@@ -7,6 +7,33 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class _RemovedOption(argparse.Action):
+    """A command-line option that no longer exists.
+
+    The option stays registered, hidden from ``--help``, so that a script
+    which still passes it stops with a clear message (exit code 2) instead of
+    argparse's generic "unrecognized arguments" error.
+    """
+
+    def __init__(self, option_strings, dest, feature):
+        self.feature = feature
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=0,
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        raise argparse.ArgumentError(
+            self,
+            f"this option was removed because {self.feature} is not part of "
+            "the published fibermorph curvature method (v0.3.1). Remove it "
+            "from your command; curvature now always runs the published method.",
+        )
+
+
 def parse_args():
     """Parse command-line arguments.
     
@@ -108,13 +135,11 @@ def parse_args():
         "of raw curvature measurements for each hair if the --within_element flag is included.",
     )
 
+    # Removed options: rejected with an explanatory error, hidden from --help.
     gr_curv.add_argument(
         "--use-clahe",
-        action="store_true",
-        default=False,
-        dest="use_clahe",
-        help="Enable CLAHE contrast enhancement before Frangi ridge filter. "
-        "Improves results on images with uneven illumination.",
+        action=_RemovedOption,
+        feature="CLAHE preprocessing",
     )
 
     gr_curv.add_argument(
@@ -312,7 +337,6 @@ def main():
             args.window_unit,
             args.save_image,
             args.within_element,
-            use_clahe=args.use_clahe,
             extended_curvature=args.extended_curvature,
         )
     elif args.section is True:
