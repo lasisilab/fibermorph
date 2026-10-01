@@ -99,9 +99,10 @@ class TestWindowSizeParsing:
         assert _window_size("--window_size", text) is None
         assert _window_size("--window_size", text, "--window_unit", "mm") is None
 
-    def test_none_cannot_be_mixed_with_numbers(self, capsys):
-        err = _parse_error(capsys, "--window_size", "50", "none")
-        assert "none" in err and "--window_size" in err
+    @pytest.mark.parametrize("values", [["50", "none"], ["none", "50"], ["none", "none"]])
+    def test_none_must_be_given_on_its_own(self, capsys, values):
+        err = _parse_error(capsys, "--window_size", *values)
+        assert "--window_size" in err and "on its own" in err
 
     @pytest.mark.parametrize("text", ["0", "0.0", "-5", "-50.0"])
     def test_px_rejects_zero_and_negative(self, capsys, text):
@@ -158,7 +159,7 @@ class TestNormalizeWindowSizes:
     @pytest.mark.parametrize(
         "values, unit",
         [([50.5], "px"), ([0.0], "px"), ([-1.0], "mm"), ([float("nan")], "mm"),
-         ([float("inf")], "mm"), ([None, 50.0], "px")],
+         ([float("inf")], "mm"), ([None, 50.0], "px"), ([None, None], "px")],
     )
     def test_invalid_values_raise_value_error(self, values, unit):
         with pytest.raises(ValueError):
@@ -292,6 +293,21 @@ def test_cli_window_size_sweep(image_dir, tmp_path):
     ]
     for window in (25, 50, 100):
         assert (run_dir / "analysis" / f"ImageSum_synthetic_curv_WindowSize-{window}px.csv").is_file()
+    _assert_same_table(table, _direct(image_dir, tmp_path / "direct", [25, 50, 100], "px"))
+
+
+def test_cli_window_under_ten_pixels_measures_each_hair_whole(image_dir, tmp_path):
+    # A window that comes to fewer than 10 pixels is not used: every hair is
+    # measured over its whole length, whatever the unit. The output still
+    # carries the window that was asked for.
+    _, mm_table = _run_cli(
+        image_dir, tmp_path / "mm", "--window_size", "0.001", "--window_unit", "mm"
+    )
+    _, px_table = _run_cli(image_dir, tmp_path / "px", "--window_size", "5")
+
+    assert list(mm_table["ID"]) == ["synthetic_curv_WindowSize-0.001mm"]
+    assert list(px_table["ID"]) == ["synthetic_curv_WindowSize-5px"]
+    _assert_same_table(mm_table.drop(columns="ID"), px_table.drop(columns="ID"))
 
 
 # ---------------------------------------------------------------------------

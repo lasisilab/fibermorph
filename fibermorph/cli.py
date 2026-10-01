@@ -66,7 +66,8 @@ def normalize_window_sizes(values, window_unit):
     if any(v is None for v in values):
         if len(values) > 1:
             raise ValueError(
-                "'none' (fit the whole hair) cannot be combined with other window sizes"
+                "'none' (fit the whole hair) must be given on its own, "
+                "not repeated or combined with window sizes"
             )
         return None
 
@@ -178,7 +179,9 @@ def parse_args(argv=None):
         "analysis in pixels or mm (given the flag --window_unit). Give several values "
         "(e.g. 25 50 100) to measure each window size in turn. With --window_unit px "
         "each value must be a whole number (50 or 50.0); with mm it can be any number "
-        "greater than 0 (0.5). If nothing is entered, or the value is 'none', the "
+        "greater than 0 (0.5). A window shorter than 10 pixels (for mm, after conversion "
+        "with --resolution_mm) is not used: each hair is measured over its whole length "
+        "in one window, with a warning. If nothing is entered, or the value is 'none', the "
         "default is None and the entire hair will be used for the curve fitting.",
     )
 

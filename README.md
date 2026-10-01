@@ -269,6 +269,9 @@ To calculate curvature from grayscale TIFF images of fibers, the flag `--curvatu
 						(e.g. 25 50 100) to measure each window size in turn.
 						With px each value must be a whole number (50 or 50.0);
 						with mm it can be any number greater than 0 (0.5).
+						A window shorter than 10 pixels (for mm, after conversion
+						with --resolution_mm) is not used: each fiber is measured
+						over its whole length in one window, with a warning.
 						If nothing is entered, or the value is 'none', the default
 						is None and the entire fiber will be used for the curve fitting.
 --window_unit {px,mm}	String. Unit of measurement for window of

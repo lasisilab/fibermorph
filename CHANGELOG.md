@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fibermorph-gui` to change it, and the startup notice then warns that the app is
   reachable from other machines. An empty `--server.address=` counts as changing
   it: Streamlit then listens on every interface, and the notice says so.
+- **A zero or negative `--window_size` now stops with an error.**
+  With `--window_unit px`, a zero or negative `--window_size` used to run: the
+  log said `less than 10 pixels, using full length` and every hair was measured
+  over its whole length. It now exits with code 2 and a usage message before any
+  analysis starts, whichever module is chosen. Use a window of 10 pixels or more,
+  or `--window_size none` (or leave the option out) to fit whole hairs. A script
+  that writes such a value, for example one downloaded from the Run Remote view
+  with a "Taubin window (px)" of 0 or less, needs a positive window.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
@@ -176,12 +184,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   values (a sweep such as `--window_size 25 50 100`), or `none` for the whole
   hair, which is also the default when the option is left out. With
   `--window_unit px` each value must be a whole number (`50` and `50.0` both
-  give 50); with `mm` it can be any number greater than 0 (`0.5`). A zero,
-  negative or non-numeric value, a fraction of a pixel, or `none` combined
-  with numbers is reported as a usage error (exit code 2) instead of a
-  traceback. Output file names are unchanged (`..._WindowSize-50px`,
-  `..._WindowSize-0.5mm`). `fibermorph.cli.main` and `parse_args` now accept an
-  optional list of arguments (default: the command line).
+  give 50); with `mm` it can be any number greater than 0 (`0.5`). A
+  non-numeric or non-finite value, a fraction of a pixel with `px`, or `none`
+  repeated or combined with numbers is reported as a usage error (exit code 2)
+  instead of a traceback; zero and negative windows are covered under
+  **Breaking Changes**. A window shorter than 10 pixels (for `mm`, after
+  conversion with `--resolution_mm`) is not used as given: each hair is
+  measured over its whole length in one window, a warning is logged, and the
+  output is still named after the window you asked for (`..._WindowSize-0.001mm`).
+  The values are checked whichever module is run. Output file names are
+  unchanged (`..._WindowSize-50px`, `..._WindowSize-0.5mm`).
+  `fibermorph.cli.main` and `parse_args` now accept an optional list of
+  arguments (default: the command line).
 
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
