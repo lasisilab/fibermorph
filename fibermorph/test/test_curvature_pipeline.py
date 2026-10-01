@@ -1,4 +1,4 @@
-"""Unit tests for analysis.curvature_pipeline (CLAHE path, extended curvature)."""
+"""Unit tests for analysis.curvature_pipeline."""
 
 import os
 
@@ -22,7 +22,7 @@ def _make_curv_tiff(tmp_path, fname: str = "test_curv.tiff",
 
 
 class TestCurvatureSeq:
-    """Tests for curvature_seq (standard and CLAHE paths, extended output)."""
+    """Tests for curvature_seq."""
 
     def test_returns_dataframe(self, tmp_path):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
@@ -31,7 +31,6 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
         )
         import pandas as pd
         assert result is not None
@@ -44,46 +43,9 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
         )
         if df is not None and not df.empty:
             assert any(c in df.columns for c in ["curv_mean", "mean", "median"])
-
-    def test_clahe_path_runs_without_error(self, tmp_path):
-        from fibermorph.analysis.curvature_pipeline import curvature_seq
-        img_path = _make_curv_tiff(tmp_path)
-        result = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=True, extended_curvature=False,
-        )
-        import pandas as pd
-        assert result is None or isinstance(result, pd.DataFrame)
-
-    def test_extended_curvature_adds_curl_index(self, tmp_path):
-        from fibermorph.analysis.curvature_pipeline import curvature_seq
-        img_path = _make_curv_tiff(tmp_path)
-        df = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=True,
-        )
-        if df is not None and not df.empty:
-            assert "curl_index" in df.columns, "Extended curvature must include curl_index"
-
-    def test_extended_curvature_adds_wave_count(self, tmp_path):
-        from fibermorph.analysis.curvature_pipeline import curvature_seq
-        img_path = _make_curv_tiff(tmp_path)
-        df = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=True,
-        )
-        if df is not None and not df.empty:
-            assert "wave_count" in df.columns, "Extended curvature must include wave_count"
 
     def test_no_crash_on_blank_image(self, tmp_path):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
@@ -95,18 +57,52 @@ class TestCurvatureSeq:
             img_path, str(tmp_path),
             resolution=132, window_size=None, window_unit="px",
             save_img=False, test=False, within_element=False,
-            use_clahe=False, extended_curvature=False,
         )
         assert result is None or isinstance(result, pd.DataFrame)
 
-    def test_clahe_plus_extended_combined(self, tmp_path):
+
+REMOVED_PARAMETERS = ("use_clahe", "extended_curvature")
+
+
+class TestRemovedOptions:
+    """CLAHE preprocessing and extended curvature are no longer options."""
+
+    @pytest.mark.parametrize("dotted", [
+        "fibermorph.analysis.curvature_pipeline.curvature_seq",
+        "fibermorph.workflows.curvature",
+        "fibermorph.workflows.batch",
+        "fibermorph.pipeline.batch.run_batch",
+    ])
+    def test_functions_have_no_removed_parameters(self, dotted):
+        import importlib
+        import inspect
+        module_name, func_name = dotted.rsplit(".", 1)
+        func = getattr(importlib.import_module(module_name), func_name)
+        parameters = inspect.signature(func).parameters
+        for name in REMOVED_PARAMETERS:
+            assert name not in parameters
+
+    @pytest.mark.parametrize("name", REMOVED_PARAMETERS)
+    def test_curvature_seq_rejects_removed_parameters(self, tmp_path, name):
         from fibermorph.analysis.curvature_pipeline import curvature_seq
         img_path = _make_curv_tiff(tmp_path)
-        result = curvature_seq(
-            img_path, str(tmp_path),
-            resolution=132, window_size=None, window_unit="px",
-            save_img=False, test=False, within_element=False,
-            use_clahe=True, extended_curvature=True,
-        )
-        import pandas as pd
-        assert result is None or isinstance(result, pd.DataFrame)
+        with pytest.raises(TypeError):
+            curvature_seq(
+                img_path, str(tmp_path),
+                resolution=132, window_size=None, window_unit="px",
+                save_img=False, test=False, within_element=False,
+                **{name: True},
+            )
+
+    @pytest.mark.parametrize("module_name, func_name", [
+        ("fibermorph.core.filters", "filter_curv_clahe"),
+        ("fibermorph.core.curvature", "curl_index_from_skeleton"),
+        ("fibermorph.core.curvature", "wave_count"),
+        ("fibermorph.core.curvature", "pixel_length_correction_coords"),
+    ])
+    def test_removed_functions_are_gone(self, module_name, func_name):
+        import importlib
+        import fibermorph
+        assert not hasattr(importlib.import_module(module_name), func_name)
+        assert not hasattr(fibermorph, func_name)
+        assert func_name not in fibermorph.__all__

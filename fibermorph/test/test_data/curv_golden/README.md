@@ -89,9 +89,8 @@ put the two files in a folder and set `FIBERMORPH_DEMO_CURV_DIR` to that folder.
 
 ## Notes
 
-* The references are for the default options (`use_clahe=False`,
-  `extended_curvature=False`). The CLAHE option and the extended-curvature
-  option (medial-axis skeleton) are not part of v0.3.1 and are not compared.
+* `curvature_seq` has a single path, the v0.3.1 method, so the references
+  cover everything it can produce; there are no analysis options to vary.
 * A hair counts for a window setting only if its skeleton is longer than the
   window (px) or 0.5 (mm), and for the whole-hair mode only if longer than
   0.5 x resolution pixels; this is why the number of rows differs between

@@ -6,7 +6,6 @@ import pathlib
 from typing import Union, List
 import logging
 
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from PIL import UnidentifiedImageError
@@ -23,8 +22,6 @@ def curvature_seq(
     save_img: bool,
     test: bool,
     within_element: bool,
-    use_clahe: bool       = False,
-    extended_curvature: bool = False,
 ) -> pd.DataFrame:
     """Sequence of steps to calculate curvature for a single image.
 
@@ -40,9 +37,6 @@ def curvature_seq(
     test                : validation run: return the per-hair table (one row per
                           hair) instead of the image summary
     within_element      : save per-hair curvature CSV distributions
-    use_clahe           : CLAHE preprocessing (improved contrast handling)
-    extended_curvature  : compute curl_index, curl_index_std, wave_count,
-                          wave_count_per_mm, length_total
 
     Returns
     -------
@@ -56,12 +50,10 @@ def curvature_seq(
         table (columns ``curv_mean``, ``curv_median``, ``length`` for a window
         size; ``curv``, ``length`` for the whole-hair mode).
     """
-    from ..core.filters import filter_curv, filter_curv_clahe
+    from ..core.filters import filter_curv
     from ..processing.binary import binarize_curv, remove_particles
     from ..processing.morphology import skeletonize, prune
-    from ..core.curvature import (analyze_all_curv,
-                                   curl_index_from_skeleton,
-                                   wave_count as wave_count_fn)
+    from ..core.curvature import analyze_all_curv
 
     try:
         with tqdm(
@@ -74,12 +66,7 @@ def curvature_seq(
             # ----------------------------------------------------------------
             # Step 1 — Filter
             # ----------------------------------------------------------------
-            if use_clahe:
-                filter_img, im_name = filter_curv_clahe(input_file, output_path, save_img)
-                # filter_curv_clahe returns uint8 binary; wrap to float for downstream compat
-                filter_img = filter_img.astype(np.float64) / 255.0
-            else:
-                filter_img, im_name = filter_curv(input_file, output_path, save_img)
+            filter_img, im_name = filter_curv(input_file, output_path, save_img)
             pbar.update(1)
 
             # ----------------------------------------------------------------
@@ -104,13 +91,7 @@ def curvature_seq(
             # ----------------------------------------------------------------
             # Step 4 — Skeletonize
             # ----------------------------------------------------------------
-            if extended_curvature:
-                # Medial-axis skeleton (matches the extended curl-index path)
-                from skimage.morphology import medial_axis
-                skel_bool = medial_axis(clean_im > 0)
-                skeleton_im = (skel_bool * 255).astype(np.uint8)
-            else:
-                skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
+            skeleton_im = skeletonize(clean_im, im_name, output_path, save_img)
             pbar.update(1)
 
             # ----------------------------------------------------------------
@@ -132,31 +113,6 @@ def curvature_seq(
                 test,
                 within_element,
             )
-
-            if extended_curvature and im_df is not None and not im_df.empty:
-                pruned_bool = pruned_im > 0
-
-                # Curl index
-                curl_mean, curl_std, len_vals = curl_index_from_skeleton(
-                    pruned_bool, resolution
-                )
-                im_df["curl_index"]     = curl_mean
-                im_df["curl_index_std"] = curl_std
-
-                # Wave count from all per-element curvature values
-                # (approximate: use curv_mean_mean as a single representative value
-                #  since we don't retain per-window traces here)
-                if "curv_mean_mean" in im_df.columns:
-                    curv_vals = im_df["curv_mean_mean"].dropna().values
-                else:
-                    curv_vals = np.array([])
-                wc = int(wave_count_fn(curv_vals)) if len(curv_vals) > 0 else 0
-                im_df["wave_count"] = wc
-                total_length_mm = float(sum(len_vals)) if len_vals else float("nan")
-                im_df["wave_count_per_mm"] = (
-                    wc / (total_length_mm + 1e-10) if not np.isnan(total_length_mm) else float("nan")
-                )
-                im_df["length_total"] = total_length_mm
 
             pbar.update(1)
             return im_df

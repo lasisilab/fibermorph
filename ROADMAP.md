@@ -23,9 +23,10 @@ published.
 - [ ] Regenerate `poetry.lock` if dependencies changed.
 
 ## Curvature science — validate before trusting
-- [ ] **Extended curvature metrics** (curl index, wave count / wave_count_per_mm)
-      came from the v2 student fork. Re-check them against the published
-      fibermorph method before promoting them out of the "experimental" toggle.
+- Extended curvature metrics (curl index, wave count) and CLAHE preprocessing
+  were removed from curvature: neither is part of the published method (see
+  [CHANGELOG.md](CHANGELOG.md)). Any curvature metric added in future has to be
+  validated against the published method before it ships.
 - [ ] **Diameter** was removed (not trusted). Revisit a medial-axis / skeleton
       diameter once the method is validated.
 - [ ] **Large curvature images (multi-GB):** investigate *safe* downsampling.
@@ -52,16 +53,12 @@ published.
       (verify classical Chan-Vese invariance first).
 
 ## Documentation
-- [ ] A **column reference** for `--extended-features` and `--extended-curvature`
-      output CSVs (which columns each flag adds).
+- [ ] A **column reference** for the `--extended-features` output CSVs (which
+      columns the flag adds).
 - [ ] A short **CONTRIBUTING / developer setup** guide (this file plus the
       "Run locally from source" section of the README are a starting point).
 
 ## Student follow-ups (file as GitHub issues)
 File one issue per finding on `lasisilab/fibermorph`, each with file:line
 references and acceptance criteria:
-- [ ] `--extended-curvature` silently swaps skeletonization (thin → medial_axis),
-      changing published curvature values.
-- [ ] `curl_index_from_skeleton` connectivity / coordinate-ordering correctness.
-- [ ] `wave_count` frequently returns 0 — verify the peak-detection approach.
 - [ ] SAM2 reachability / config-default handling for `--use-sam2`.

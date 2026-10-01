@@ -19,8 +19,6 @@ from .core.curvature import (
     analyze_each_curv,
     analyze_all_curv,
     window_iter,
-    curl_index_from_skeleton,
-    wave_count,
 )
 
 # Heavier imports wrapped so the package still loads without opencv/scikit-image
@@ -41,7 +39,7 @@ try:
         extract_features_from_array,
         classify_shape,
     )
-    from .core.filters import filter_curv, filter_curv_clahe
+    from .core.filters import filter_curv
     from .processing.binary import check_bin, binarize_curv, remove_particles
     from .processing.morphology import skeletonize, prune, diag
     from .processing.geometry import (
@@ -76,8 +74,6 @@ __all__ = [
     "analyze_each_curv",
     "analyze_all_curv",
     "window_iter",
-    "curl_index_from_skeleton",
-    "wave_count",
     # Main workflows
     "raw2gray",
     "curvature",
@@ -99,7 +95,6 @@ __all__ = [
     "classify_shape",
     # Filters
     "filter_curv",
-    "filter_curv_clahe",
     # Processing
     "check_bin",
     "binarize_curv",

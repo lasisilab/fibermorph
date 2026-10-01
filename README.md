@@ -13,7 +13,6 @@ fibermorph provides powerful image analysis tools for studying fiber curvature a
 - **Flexible resolution units** — enter px/µm or µm/px (px/mm or mm/px) in the GUI or CLI and it converts for you
 - **Run locally for large images** — `fibermorph-gui --local` raises the upload cap to 5 GB and adds a "Folder on disk" input (read images straight from disk)
 - **SAM2 GPU segmentation** for cross-sections (optional; falls back to watershed on CPU), with extended shape features (`--extended-features`)
-- **CLAHE preprocessing** for curvature images with uneven illumination (`--use-clahe`)
 - **SBATCH script generation** from the GUI's Run Remote view (build & download — you submit it yourself)
 - **GPU Docker target** for container deployment with SAM2
 
@@ -173,27 +172,19 @@ fibermorph --demo_real_section --output_directory ~/fibermorph_demo_section
 ### Curvature analysis
 
 ```bash
-# Basic (same as v1):
 fibermorph --curvature \
   --input_directory /path/to/images \
   --output_directory /path/to/results \
   --resolution_mm 132 \
-  --jobs 4
-
-# With new v2 options:
-fibermorph --curvature \
-  --input_directory /path/to/images \
-  --output_directory /path/to/results \
-  --resolution_mm 132 \
-  --use-clahe \
-  --extended-curvature \
   --jobs 4
 ```
 
-New curvature flags:
-- `--use-clahe` — CLAHE contrast enhancement before the Frangi ridge filter
-- `--extended-curvature` — adds `curl_index`, `curl_index_std`, `wave_count`, `wave_count_per_mm`, and `length_total` columns (experimental — from the v2 fork; validate before relying on them)
+Curvature analysis uses the published fibermorph method (v0.3.1) and has no alternative processing modes. Its ridge filter is the scikit-image 0.16.2 Frangi filter bundled with fibermorph, so that step gives the published result whichever scikit-image version is installed.
+
+New curvature flag:
 - `--resolution_mm_units {px_per_mm,mm_per_px}` — interpret `--resolution_mm` as pixels-per-mm (default) or mm-per-pixel
+
+Two options from earlier v2.0 development builds, `--use-clahe` (CLAHE contrast enhancement) and `--extended-curvature` (curl index, wave count, medial-axis skeleton), have been removed because they are not part of the published method. They no longer appear in `--help`, and a command that still passes either one stops with an error (exit code 2) that says so; delete the flag from the command (or from an older generated SBATCH script) to run the published method.
 
 ### Section analysis
 
