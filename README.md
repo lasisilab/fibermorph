@@ -259,9 +259,9 @@ To run the demo, you will input something like:
 ### Curvature
 To calculate curvature from grayscale TIFF images of fibers, the flag `--curvature` is used with the following flags in addition to input and output directories:
 ```
---resolution_mm       	Integer. Number of pixels per mm for
+--resolution_mm       	Float. Number of pixels per mm for
 						curvature analysis.
-						Default is 132.
+						Default is 132. Must be greater than 0.
 --window_size  [ ...] 	Float or integer or None. Desired size for
 						window of measurement
 						for curvature analysis in pixels or mm (given
@@ -296,8 +296,11 @@ fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --o
 To calculate cross-sectional properties from grayscale TIFF images of fibers, the flag `--section` is used with the following flags:
 ```
 --resolution_mu       Float. Number of pixels per micron for section analysis. Default is 4.25.
+                      Must be greater than 0.
 --minsize             Integer. Minimum diameter in microns for sections. Default is 20.
+                      Must be 0 or more and no larger than --maxsize.
 --maxsize             Integer. Maximum diameter in microns for sections. Default is 150.
+                      Must be greater than 0.
 
 ```
 
@@ -322,3 +325,6 @@ A user could enter, for example:
 ```
 fibermorph --raw2gray --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName> --file_extension .RW2 --jobs 4
 ```
+
+### Checks on numeric options
+Before any image is read, fibermorph checks the numeric options, whichever module is run, and stops with a usage message (exit code 2) if one is out of range: `--jobs` must not be 0 (use a positive number, or -1 for every CPU); `--resolution_mm` and `--resolution_mu` must be finite and greater than 0; `--minsize` must be 0 or more, `--maxsize` greater than 0, and `--minsize` no larger than `--maxsize`; and `--window_size` follows the rules listed under Curvature.

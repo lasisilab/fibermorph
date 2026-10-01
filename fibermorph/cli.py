@@ -89,6 +89,67 @@ def normalize_window_sizes(values, window_unit):
     return normalized
 
 
+def check_numeric_options(args):
+    """Reject numeric options that would fail, or give nothing, deep in a run.
+
+    ``--jobs``, ``--resolution_mm``, ``--resolution_mu``, ``--minsize`` and
+    ``--maxsize`` only have an argparse ``type`` of ``int`` or ``float``, which
+    accepts values such as ``--jobs 0`` (joblib raises ``ValueError``),
+    ``--resolution_mm 0`` or ``nan`` (a traceback), or ``--minsize 200
+    --maxsize 100`` (no section can match). This checks them once ``args`` is
+    parsed, whichever module was chosen.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed arguments, as returned by ``parser.parse_args``.
+
+    Raises
+    ------
+    ValueError
+        With a message that starts "argument --<option>:" if ``--jobs`` is 0
+        (negative values are joblib's count-from-all-CPUs settings, -1 for
+        every CPU and -2 for all but one, and are allowed); a resolution is
+        not a finite number greater than 0, or is so small that its
+        reciprocal overflows when ``mm_per_px`` / ``um_per_px`` is converted
+        to pixels per unit; ``--minsize`` is negative; ``--maxsize`` is not
+        greater than 0; or ``--minsize`` is larger than ``--maxsize``.
+    """
+    from .utils.units import resolution_to_px_per_unit
+
+    if args.jobs == 0:
+        raise ValueError(
+            "argument --jobs: must not be 0 (use a positive number of jobs, "
+            "or -1 for every CPU)"
+        )
+
+    for option, units in (
+        ("resolution_mm", args.resolution_mm_units),
+        ("resolution_mu", args.resolution_mu_units),
+    ):
+        value = getattr(args, option)
+        if not (math.isfinite(value) and value > 0):
+            raise ValueError(
+                f"argument --{option}: must be a finite number greater than 0 "
+                f"(got {value!r})"
+            )
+        if not math.isfinite(resolution_to_px_per_unit(value, units)):
+            raise ValueError(
+                f"argument --{option}: {value!r} is too small to convert from "
+                f"{units} to pixels per unit"
+            )
+
+    if args.minsize < 0:
+        raise ValueError(f"argument --minsize: must not be negative (got {args.minsize})")
+    if args.maxsize <= 0:
+        raise ValueError(f"argument --maxsize: must be greater than 0 (got {args.maxsize})")
+    if args.minsize > args.maxsize:
+        raise ValueError(
+            f"argument --minsize: {args.minsize} is larger than --maxsize "
+            f"({args.maxsize}); no section could match"
+        )
+
+
 def parse_args(argv=None):
     """Parse command-line arguments.
 
@@ -102,7 +163,9 @@ def parse_args(argv=None):
     argparse.Namespace
         Parser argument namespace. ``window_size`` is None (fit the whole hair)
         or a list of window sizes: ints for ``--window_unit px``, floats for
-        ``mm``.
+        ``mm``. Out-of-range ``--window_size``, ``--jobs``, ``--resolution_mm``,
+        ``--resolution_mu``, ``--minsize`` and ``--maxsize`` values stop the
+        parser with exit code 2, whichever module is chosen.
     """
     from . import __version__
     
@@ -135,7 +198,8 @@ def parse_args(argv=None):
         type=int,
         metavar="",
         default=1,
-        help="Integer. Number of parallel jobs to run. Default is 1.",
+        help="Integer. Number of parallel jobs to run; -1 uses every CPU, 0 is not "
+        "allowed. Default is 1.",
     )
 
     parser.add_argument(
@@ -156,8 +220,8 @@ def parse_args(argv=None):
         type=float,
         metavar="",
         default=132.0,
-        help="Float. Curvature scale, interpreted per --resolution_mm_units. "
-        "Default is 132 (pixels per mm).",
+        help="Float. Curvature scale, interpreted per --resolution_mm_units. Must be "
+        "greater than 0. Default is 132 (pixels per mm).",
     )
 
     gr_curv.add_argument(
@@ -230,8 +294,8 @@ def parse_args(argv=None):
         type=float,
         metavar="",
         default=4.25,
-        help="Float. Section scale, interpreted per --resolution_mu_units. "
-        "Default is 4.25 (pixels per micron).",
+        help="Float. Section scale, interpreted per --resolution_mu_units. Must be "
+        "greater than 0. Default is 4.25 (pixels per micron).",
     )
 
     gr_sect.add_argument(
@@ -249,7 +313,8 @@ def parse_args(argv=None):
         type=int,
         metavar="",
         default=20,
-        help="Integer. Minimum diameter in microns for sections. Default is 20.",
+        help="Integer. Minimum diameter in microns for sections. Must be 0 or more "
+        "and no larger than --maxsize. Default is 20.",
     )
 
     gr_sect.add_argument(
@@ -257,7 +322,8 @@ def parse_args(argv=None):
         type=int,
         metavar="",
         default=150,
-        help="Integer. Maximum diameter in microns for sections. Default is 150.",
+        help="Integer. Maximum diameter in microns for sections. Must be greater "
+        "than 0. Default is 150.",
     )
 
     gr_sect.add_argument(
@@ -359,6 +425,12 @@ def parse_args(argv=None):
         args.window_size = normalize_window_sizes(args.window_size, args.window_unit)
     except ValueError as exc:
         parser.error(f"argument --window_size: {exc}")
+
+    # Other numeric options: --jobs, resolutions and section size limits
+    try:
+        check_numeric_options(args)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Validate arguments
     demo_mods = [args.demo_real_curv, args.demo_real_section]

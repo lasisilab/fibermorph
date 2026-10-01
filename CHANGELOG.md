@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `--window_size none` (or leave the option out) to fit whole hairs. A script
   that writes such a value, for example one downloaded from the Run Remote view
   with a "Taubin window (px)" of 0 or less, needs a positive window.
+- **A negative `--minsize` now stops with an error.**
+  `fibermorph --section --minsize -5` used to run, the negative value acting
+  as a lower bound of 0. It now exits with code 2 and a usage message before
+  any image is read, whichever module is chosen. Use `--minsize 0` or a
+  positive number. A script that writes a negative minimum, for example one
+  downloaded from the Run Remote view with a "Min diameter (µm)" below 0 (that
+  box has no lower limit), needs a value of 0 or more.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
@@ -196,6 +203,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged (`..._WindowSize-50px`, `..._WindowSize-0.5mm`).
   `fibermorph.cli.main` and `parse_args` now accept an optional list of
   arguments (default: the command line).
+- **Out-of-range numbers on the command line now give a usage message instead of
+  a traceback.** These all ended in a traceback or an empty result: `--jobs 0`
+  (joblib: `n_jobs == 0 in Parallel has no meaning`); `--resolution_mm` or
+  `--resolution_mu` of 0, a negative number, `nan` or `inf` (`Resolution must be
+  greater than 0.`, `cannot convert float NaN to integer`, or `OverflowError`; a
+  zero or negative `--resolution_mm` also stopped `--section` and `--raw2gray`
+  runs, which do not use it; a `nan` or `inf` `--resolution_mu` with
+  `--section` ended in `KeyError: "None of ['ID'] are in the columns"` or in
+  exit code 0 with a table that has no rows); `--maxsize 0`; and a `--minsize`
+  larger than `--maxsize` (no section can match). They now exit with code 2
+  before any image is read, whichever module is chosen, and the message names
+  the option. The rules:
+  `--jobs` must not be 0 (`-1` for every CPU still works); `--resolution_mm` and
+  `--resolution_mu` must be finite and greater than 0, also after conversion
+  from `mm_per_px` or `um_per_px`; `--minsize` must be 0 or more, `--maxsize`
+  greater than 0, and `--minsize` no larger than `--maxsize`. A negative
+  `--minsize`, which used to run as if it were 0, is refused too (see
+  **Breaking Changes**). Not covered: a `--section` run whose limits are valid
+  but match no section (for example `--minsize 400 --maxsize 500` on images
+  with thinner hairs, or an absurdly large `--resolution_mu`) still ends in the
+  same `KeyError`; that comes from the section workflow, which is not changed
+  here.
 
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the

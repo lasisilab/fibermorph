@@ -1,8 +1,9 @@
 """Tests for the fibermorph command line (fibermorph.cli).
 
-Covers how ``--window_size`` is parsed and validated, and runs the real entry
-point (``fibermorph.cli.main`` and ``python -m fibermorph``) on a small
-synthetic curvature image.
+Covers how ``--window_size`` is parsed and validated, how out-of-range values
+of ``--jobs``, the resolutions and the section size limits are refused, and
+runs the real entry point (``fibermorph.cli.main`` and ``python -m
+fibermorph``) on a small synthetic curvature image.
 
 Before ``--window_size`` was parsed as a number, its values reached the
 curvature code as strings: ``--window_unit mm`` crashed with a TypeError
@@ -36,10 +37,10 @@ def _window_size(*args):
     return parse_args(BASE + list(args)).window_size
 
 
-def _parse_error(capsys, *args):
+def _parse_error(capsys, *args, base=BASE):
     """Parse ``args`` expecting argparse to reject them; return the error text."""
     with pytest.raises(SystemExit) as excinfo:
-        parse_args(BASE + list(args))
+        parse_args(list(base) + list(args))
     assert excinfo.value.code == 2
     return capsys.readouterr().err
 
@@ -140,6 +141,80 @@ class TestWindowSizeParsing:
         )
         assert args.window_size == [50]
         assert args.window_unit == "px"
+
+
+class TestNumericOptions:
+    """--jobs, the resolutions and the section size limits."""
+
+    def test_defaults_are_accepted(self):
+        args = parse_args(BASE)
+        assert (args.jobs, args.resolution_mm, args.resolution_mu) == (1, 132.0, 4.25)
+        assert (args.minsize, args.maxsize) == (20, 150)
+
+    @pytest.mark.parametrize("jobs", ["1", "4", "-1", "-2"])
+    def test_jobs_accepts_positive_numbers_and_joblibs_negative_ones(self, jobs):
+        assert parse_args(BASE + ["--jobs", jobs]).jobs == int(jobs)
+
+    def test_jobs_rejects_zero(self, capsys):
+        err = _parse_error(capsys, "--jobs", "0")
+        assert "--jobs" in err and "must not be 0" in err
+        assert "Traceback" not in err
+
+    @pytest.mark.parametrize("option", ["--resolution_mm", "--resolution_mu"])
+    @pytest.mark.parametrize("text", ["0", "0.0", "-5", "-0.25", "nan", "inf"])
+    def test_resolution_rejects_zero_negative_and_non_finite(self, capsys, option, text):
+        err = _parse_error(capsys, option, text)
+        assert option in err and "finite number greater than 0" in err
+        assert "Traceback" not in err
+
+    @pytest.mark.parametrize(
+        "option, units_option, units",
+        [
+            ("--resolution_mm", "--resolution_mm_units", "mm_per_px"),
+            ("--resolution_mu", "--resolution_mu_units", "um_per_px"),
+        ],
+    )
+    def test_resolution_in_reciprocal_units(self, capsys, option, units_option, units):
+        args = parse_args(BASE + [option, "0.0076", units_option, units])
+        assert getattr(args, option[2:]) == 0.0076
+        # a value so small that 1 / value overflows cannot become pixels per unit
+        err = _parse_error(capsys, option, "1e-320", units_option, units)
+        assert option in err and "too small" in err
+
+    @pytest.mark.parametrize("module", ["--section", "--raw2gray"])
+    @pytest.mark.parametrize(
+        "bad",
+        [["--resolution_mm", "0"], ["--resolution_mu", "nan"], ["--jobs", "0"]],
+    )
+    def test_checked_whichever_module_is_chosen(self, capsys, module, bad):
+        err = _parse_error(capsys, *bad, base=[module, "-i", "in_dir", "-o", "out_dir"])
+        assert bad[0] in err
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            ["--minsize", "0"],
+            ["--minsize", "50", "--maxsize", "50"],
+            ["--minsize", "0", "--maxsize", "1"],
+        ],
+    )
+    def test_section_size_limits_accepted(self, extra):
+        args = parse_args(["--section", "-i", "in_dir", "-o", "out_dir"] + extra)
+        assert args.minsize <= args.maxsize
+
+    @pytest.mark.parametrize(
+        "extra, message",
+        [
+            (["--minsize", "-1"], "--minsize: must not be negative"),
+            (["--maxsize", "0"], "--maxsize: must be greater than 0"),
+            (["--maxsize", "-5"], "--maxsize: must be greater than 0"),
+            (["--minsize", "200", "--maxsize", "100"], "--minsize: 200 is larger than --maxsize"),
+        ],
+    )
+    def test_section_size_limits_rejected(self, capsys, extra, message):
+        err = _parse_error(capsys, *extra, base=["--section", "-i", "in_dir", "-o", "out_dir"])
+        assert message in err
+        assert "Traceback" not in err
 
 
 class TestNormalizeWindowSizes:
@@ -360,3 +435,44 @@ def test_module_run_reports_bad_window_size_without_a_traceback(
     assert "Traceback" not in result.stderr
     assert "--window_size" in result.stderr and message in result.stderr
     assert not out_dir.exists()
+
+
+@pytest.mark.parametrize(
+    "module, bad_args, option",
+    [
+        ("--curvature", ["--jobs", "0"], "--jobs"),
+        ("--curvature", ["--resolution_mm", "0"], "--resolution_mm"),
+        ("--curvature", ["--resolution_mm", "-5"], "--resolution_mm"),
+        ("--curvature", ["--resolution_mm", "nan"], "--resolution_mm"),
+        ("--curvature", ["--resolution_mm", "inf"], "--resolution_mm"),
+        ("--section", ["--resolution_mu", "0"], "--resolution_mu"),
+        ("--section", ["--resolution_mu", "nan"], "--resolution_mu"),
+        ("--section", ["--jobs", "0"], "--jobs"),
+        ("--section", ["--minsize", "200", "--maxsize", "100"], "--minsize"),
+        # an option the chosen module does not use is checked all the same
+        ("--section", ["--resolution_mm", "0"], "--resolution_mm"),
+        ("--raw2gray", ["--resolution_mm", "0"], "--resolution_mm"),
+    ],
+)
+def test_module_run_reports_bad_numeric_options_without_a_traceback(
+    image_dir, tmp_path, module, bad_args, option
+):
+    out_dir = tmp_path / "out"
+    result = _module_run(module, "-i", str(image_dir), "-o", str(out_dir), *bad_args)
+
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+    assert f"argument {option}:" in result.stderr
+    assert not out_dir.exists()
+
+
+def test_module_run_accepts_jobs_minus_one(image_dir, tmp_path):
+    out_dir = tmp_path / "out"
+    result = _module_run(
+        "--curvature", "-i", str(image_dir), "-o", str(out_dir),
+        "--resolution_mm", str(RESOLUTION), "--window_size", "50", "--jobs", "-1",
+    )
+
+    assert result.returncode == 0, result.stderr
+    (summary,) = out_dir.glob("*_fibermorph_curvature/curvature_summary_data_*.csv")
+    assert list(pd.read_csv(summary)["ID"]) == ["synthetic_curv_WindowSize-50px"]
