@@ -20,7 +20,9 @@ first: command-line option, ``STREAMLIT_*`` environment variable,
   ``STREAMLIT_SERVER_ADDRESS`` and ``config.toml`` do not widen who can reach
   folder input. Pass ``--server.address`` yourself to change it.
 * Anything given on the ``fibermorph-gui`` command line overrides all of the
-  above.
+  above. An empty ``--server.address=`` is not "unset": Streamlit then listens
+  on every interface, so the startup notice warns about it like any other
+  address that is not localhost.
 """
 
 from __future__ import annotations
@@ -144,12 +146,17 @@ def _startup_notice(local: bool, extra_args) -> str:
             "upload cap). To run on your own machine with folder input and "
             "5 GB uploads, use: fibermorph-gui --local"
         )
-    address = _option_value(extra_args, "--server.address") or "localhost"
+    address = _option_value(extra_args, "--server.address")
+    if address is None:
+        address = "localhost"  # the launcher's own default (see above)
     notice = f"fibermorph-gui: starting in local mode (folder input, {cap} MB uploads"
     if address in _LOOPBACK_ADDRESSES:
         return notice + ", localhost only)."
+    # An empty --server.address is not "unset" to Streamlit: it listens on
+    # every interface (0.0.0.0), so it is reported as wider than localhost.
+    listening = address or "all network interfaces"
     return (
-        notice + f", listening on {address}). WARNING: anyone who can reach this "
+        notice + f", listening on {listening}). WARNING: anyone who can reach this "
         "machine over the network can read folders on it."
     )
 

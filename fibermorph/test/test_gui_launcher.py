@@ -250,6 +250,9 @@ def test_local_notice_says_localhost_only_by_default(run_launcher, capsys):
     ["--server.address", "0.0.0.0"],
     ["--server.address=0.0.0.0"],
     ["--server.address", "192.168.0.5"],
+    # Streamlit treats an empty address as 0.0.0.0 (every interface).
+    ["--server.address="],
+    ["--server.address", ""],
 ])
 def test_local_notice_warns_when_address_is_widened(run_launcher, capsys, flag):
     run_launcher(["--local", *flag])
@@ -257,6 +260,12 @@ def test_local_notice_warns_when_address_is_widened(run_launcher, capsys, flag):
     assert "localhost only" not in err
     assert "WARNING" in err
     assert "read folders on it" in err
+
+
+@pytest.mark.parametrize("flag", [["--server.address="], ["--server.address", ""]])
+def test_local_notice_says_every_interface_for_an_empty_address(run_launcher, capsys, flag):
+    run_launcher(["--local", *flag])
+    assert "all network interfaces" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("address", ["localhost", "127.0.0.1", "::1"])
@@ -355,3 +364,10 @@ def test_streamlit_honours_command_line_address_in_local_mode(tmp_path):
         ["--local", "--server.address", "0.0.0.0"],
     )
     assert got["server.address"] == "0.0.0.0"
+
+
+def test_streamlit_gets_an_empty_address_when_asked_for_one(tmp_path):
+    # Streamlit's server then falls back to 0.0.0.0 (every interface), which is
+    # why the startup notice warns about it instead of saying "localhost only".
+    got = _resolved_options(tmp_path, {}, ["--local", "--server.address="])
+    assert got["server.address"] == ""

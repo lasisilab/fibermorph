@@ -133,7 +133,8 @@ for you.)
 > - In local mode `--server.address localhost` is always passed, so
 >   `STREAMLIT_SERVER_ADDRESS` and `config.toml` cannot open folder input to other
 >   machines by accident. To listen elsewhere, add `--server.address <address>` to
->   the command (the launcher then prints a warning).
+>   the command (the launcher then prints a warning; an empty `--server.address=`
+>   also counts, because Streamlit then listens on every interface).
 > - Hosted mode passes no address or port, so Streamlit's usual settings
 >   (`STREAMLIT_SERVER_ADDRESS`, `STREAMLIT_SERVER_PORT`, `config.toml`) apply.
 

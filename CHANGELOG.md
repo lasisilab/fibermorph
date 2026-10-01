@@ -37,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and overrides `STREAMLIT_SERVER_ADDRESS` and `config.toml`, so folder input is
   never opened to other machines by accident; pass `--server.address <address>` to
   `fibermorph-gui` to change it, and the startup notice then warns that the app is
-  reachable from other machines.
+  reachable from other machines. An empty `--server.address=` counts as changing
+  it: Streamlit then listens on every interface, and the notice says so.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
