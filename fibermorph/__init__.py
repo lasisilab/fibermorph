@@ -19,8 +19,6 @@ from .core.curvature import (
     analyze_each_curv,
     analyze_all_curv,
     window_iter,
-    curl_index_from_skeleton,
-    wave_count,
 )
 
 # Heavier imports wrapped so the package still loads without opencv/scikit-image
@@ -76,8 +74,6 @@ __all__ = [
     "analyze_each_curv",
     "analyze_all_curv",
     "window_iter",
-    "curl_index_from_skeleton",
-    "wave_count",
     # Main workflows
     "raw2gray",
     "curvature",

@@ -13,6 +13,7 @@ from fibermorph import cli
 # flag -> the feature the error message names
 REMOVED_OPTIONS = {
     "--use-clahe": "CLAHE preprocessing",
+    "--extended-curvature": "extended curvature",
 }
 
 
@@ -60,3 +61,9 @@ def test_curvature_command_without_removed_options_still_parses(monkeypatch):
     assert args.curvature is True
     for flag in REMOVED_OPTIONS:
         assert not hasattr(args, flag.lstrip("-").replace("-", "_"))
+
+
+def test_cross_section_extended_features_flag_is_unaffected(monkeypatch):
+    args = _parse(monkeypatch, "--section", "-i", "in", "-o", "out", "--extended-features")
+    assert args.section is True
+    assert args.extended_features is True

@@ -71,7 +71,6 @@ def run_batch(
     sam2_cfg: str        = "",
     save_img: bool       = False,
     extended_features: bool  = True,
-    extended_curvature: bool = True,
     jobs: int            = 1,
 ) -> pd.DataFrame:
     """Run batch processing for section and/or curvature images.
@@ -91,7 +90,6 @@ def run_batch(
     sam2_cfg            : SAM2 model config yaml
     save_img            : save intermediate images
     extended_features   : compute EFD, Hu moments, radial profile, shape class
-    extended_curvature  : compute curl index, wave count, total length
     jobs                : parallel jobs (passed to section/curvature if supported)
 
     Returns
@@ -164,7 +162,6 @@ def run_batch(
                 save_img=kwargs.get("save_img", False),
                 test=False,
                 within_element=False,
-                extended_curvature=kwargs.get("extended_curvature", True),
             )
             return df
 
@@ -173,7 +170,6 @@ def run_batch(
             "window_size":        window_size,
             "window_unit":        window_unit,
             "save_img":           save_img,
-            "extended_curvature": extended_curvature,
         }
         rows = _process_dir(paths, _run_curvature, "curvature", curv_kwargs)
         all_rows.extend(rows)

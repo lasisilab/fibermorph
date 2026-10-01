@@ -223,9 +223,14 @@ def test_script_uses_the_checkpoint_typed_for_the_cluster(monkeypatch, tmp_path,
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("view", ["curvature", "remote"])
-def test_curvature_settings_offer_no_clahe_option(monkeypatch, view):
+def test_curvature_settings_offer_only_the_published_method(monkeypatch, view):
     at = _run_app(monkeypatch, local=False, view=view)
-    assert not [t for t in at.toggle if "CLAHE" in t.label]
+    labels = _labels(at.toggle)
+    for removed in ("CLAHE", "xtended curvature", "xperimental"):
+        assert not [label for label in labels if removed in label]
+    # Cross-section extended features are a separate option and stay.
+    if view == "remote":
+        assert [label for label in labels if label.startswith("Extended features")]
 
 
 @pytest.mark.parametrize("local", [False, True], ids=["hosted", "local"])
@@ -238,6 +243,7 @@ def test_generated_curvature_script_has_no_removed_flags(monkeypatch, local):
     assert "fibermorph --curvature" in script
     assert "--window_size 50" in script
     assert "--use-clahe" not in script
+    assert "--extended-curvature" not in script
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +356,12 @@ def test_curvature_duplicate_uploads_are_measured_separately_and_named_as_upload
     summ = at.session_state["curvature_summary"]
     assert list(frags["source_file"]) == ["fiber.png", "fiber.png"]
     assert list(summ["source_file"]) == ["fiber.png", "fiber.png"]
+    # Guards the shape of the summary: only the published measurements, no
+    # curl index / wave count columns. That the extended toggle is gone is
+    # checked by test_curvature_settings_offer_only_the_published_method.
+    assert list(summ.columns) == ["source_file", "n_fragments", "curv_mean",
+                                  "curv_median", "length_mean", "length_median",
+                                  "length_total"]
     assert "upload_" not in frags.to_csv(index=False)
     assert "upload_" not in summ.to_csv(index=False)
     # Two different images, so two different measurements (not the second one twice).

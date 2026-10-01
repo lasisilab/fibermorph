@@ -163,11 +163,10 @@ def _process_curvature_gui(
     tmp_path: str,
     resolution_mm: float,
     window_size: int,
-    extended: bool = False,
 ):
     """Run curvature analysis on a single image.
 
-    Returns a dict {"fragments": DataFrame|None, "image_row": dict} or None.
+    Returns the per-fragment DataFrame, or None if nothing was measured.
 
     The pipeline detects each connected fiber fragment, measures its length and
     curvature, and writes that per-fragment table to analysis/ImageSum_<name>.csv
@@ -189,11 +188,9 @@ def _process_curvature_gui(
             save_img=False,
             test=False,
             within_element=False,
-            extended_curvature=extended,
         )
         if df is None or (hasattr(df, "empty") and df.empty):
             return None
-        image_row = df.iloc[0].to_dict() if hasattr(df, "iloc") else {}
 
         fragments = None
         matches = glob.glob(os.path.join(out_dir, "**", "ImageSum_*.csv"),
@@ -207,7 +204,7 @@ def _process_curvature_gui(
                 fdf.insert(0, "fragment", range(1, len(fdf) + 1))
                 fragments = fdf
 
-    return {"fragments": fragments, "image_row": image_row}
+    return fragments
 
 
 def _warn_duplicate_names(names):
@@ -666,11 +663,6 @@ elif _view == "curvature":
                  "= more local detail. Keep it well below your fragment length.")
         curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
-        curv_ext = st.toggle(
-            "Show extended (experimental) metrics", value=False, key="curv_ext",
-            help="Curl index and wave count. These were added in the v2 student "
-                 "fork and are NOT part of the published fibermorph curvature "
-                 "method — treat them as experimental.")
 
     if st.button("▶ Analyze curvature", type="primary", key="curv_run"):
         if _source_is_empty(curv_source):
@@ -687,17 +679,15 @@ elif _view == "curvature":
                     progress.progress(idx / len(curv_inputs),
                                       text=f"Processing {name}…")
                     try:
-                        result = _process_curvature_gui(
+                        frags = _process_curvature_gui(
                             path,
                             resolution_mm=float(curv_res_mm),
                             window_size=int(curv_window),
-                            extended=bool(curv_ext),
                         )
                     except Exception as e:
                         st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
-                        result = None
+                        frags = None
 
-                    frags = result.get("fragments") if result else None
                     if frags is not None and not frags.empty:
                         f = frags.copy()
                         f.insert(0, "source_file", name)
@@ -711,12 +701,6 @@ elif _view == "curvature":
                             "length_median": float(frags["length"].median()),
                             "length_total":  float(frags["length"].sum()),
                         }
-                        if curv_ext:
-                            ir = (result or {}).get("image_row", {}) or {}
-                            for k in ("curl_index", "wave_count",
-                                      "wave_count_per_mm"):
-                                if k in ir:
-                                    summ[k] = ir[k]
                         summ_rows.append(summ)
                     else:
                         failed.append(name)
@@ -794,13 +778,10 @@ elif _view == "curvature":
                 "length_mean":       "Mean Length (mm)",
                 "length_median":     "Median Length (mm)",
                 "length_total":      "Total Length (mm)",
-                "curl_index":        "Curl Index (v2)",
-                "wave_count":        "Wave Count (v2)",
-                "wave_count_per_mm": "Waves/mm (v2)",
             }
             spresent = {k: v for k, v in summ_labels.items() if k in summ_df.columns}
             fmt = {v: "{:.4f}" for k, v in spresent.items()
-                   if k not in ("source_file", "n_fragments", "wave_count")}
+                   if k not in ("source_file", "n_fragments")}
             st.dataframe(
                 summ_df[list(spresent.keys())].rename(columns=spresent).style.format(fmt),
                 use_container_width=True,
@@ -981,9 +962,6 @@ elif _view == "remote":
                  "below your fragment length.")
         resolution_mm   = resolution_to_px_per_unit(curv_res_val_b, curv_res_unit_b)
         st.caption(f"Script will pass **--resolution_mm {resolution_mm:.4g}** (px/mm).")
-        ext_curvature = st.toggle(
-            "Extended curvature metrics (curl index, wave count)", value=True
-        )
 
     with st.expander("SLURM settings", expanded=False):
         col_a, col_b, col_c = st.columns(3)
@@ -1045,8 +1023,6 @@ elif _view == "remote":
                     f"    --window_size {int(window_size)}",
                     f"    --jobs {int(slurm_cpus)}",
                 ]
-                if ext_curvature:
-                    curv_flags.append("    --extended-curvature")
                 commands.append(" \\\n".join(curv_flags))
 
             directives = [

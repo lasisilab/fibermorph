@@ -79,7 +79,6 @@ def curvature(
     window_unit: str,
     save_img: bool,
     within_element: bool,
-    extended_curvature: bool = False,
 ) -> bool:
     """Takes directory of grayscale tiff images and analyzes curvature for each curve/line.
 
@@ -141,7 +140,6 @@ def curvature(
                 save_img,
                 test=False,
                 within_element=within_element,
-                extended_curvature=extended_curvature,
             )
             for input_file in file_list
         )
@@ -270,7 +268,6 @@ def batch(
     sam2_checkpoint: str     = "",
     sam2_cfg: str            = "",
     extended_features: bool  = True,
-    extended_curvature: bool = True,
 ) -> bool:
     """Run batch analysis on section and/or curvature image directories.
 
@@ -293,7 +290,6 @@ def batch(
     sam2_checkpoint     : path to SAM2 .pt weights file
     sam2_cfg            : SAM2 model config yaml
     extended_features   : EFD, Hu moments, radial profile, shape class (section)
-    extended_curvature  : curl_index, wave_count, length_total (curvature)
 
     Returns
     -------
@@ -324,7 +320,6 @@ def batch(
         sam2_cfg        = sam2_cfg,
         save_img        = save_img,
         extended_features   = extended_features,
-        extended_curvature  = extended_curvature,
         jobs            = jobs,
     )
 

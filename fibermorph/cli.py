@@ -144,11 +144,8 @@ def parse_args():
 
     gr_curv.add_argument(
         "--extended-curvature",
-        action="store_true",
-        default=False,
-        dest="extended_curvature",
-        help="Compute extended curvature metrics: curl_index, curl_index_std, "
-        "wave_count, wave_count_per_mm, length_total.",
+        action=_RemovedOption,
+        feature="extended curvature (curl index, wave count)",
     )
 
     gr_sect = parser.add_argument_group(
@@ -337,7 +334,6 @@ def main():
             args.window_unit,
             args.save_image,
             args.within_element,
-            extended_curvature=args.extended_curvature,
         )
     elif args.section is True:
         section(
