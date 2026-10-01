@@ -20,8 +20,10 @@ Four tabs:
                      or connect to any cluster.
 
 Start via:
-  fibermorph-gui            # hosted mode: uploads only, 500 MB cap
-  fibermorph-gui --local    # local mode: folder input, 5 GB cap, localhost only
+  fibermorph-gui            # hosted mode: uploads only, 500 MB default cap
+  fibermorph-gui --local    # local mode: folder input, 5 GB default cap, localhost only
+  # (the cap shown in the app is Streamlit's server.maxUploadSize, so it follows
+  # STREAMLIT_SERVER_MAX_UPLOAD_SIZE or --server.maxUploadSize if you set one)
   # or directly:
   python -m streamlit run fibermorph/gui/app.py --server.port 8501
 """
@@ -229,6 +231,24 @@ def _warn_duplicate_names(names):
 _LOCAL = os.environ.get("FIBERMORPH_LOCAL") == "1"
 
 
+def _upload_cap() -> str:
+    """The upload cap Streamlit is enforcing, as text for the page ("500 MB",
+    "5 GB").
+
+    Read from Streamlit's own setting, so it follows whatever the host chose
+    (the launcher's default, STREAMLIT_SERVER_MAX_UPLOAD_SIZE,
+    --server.maxUploadSize or config.toml) and always matches the limit the
+    file uploader shows.
+    """
+    try:
+        return inputs.format_upload_cap(st.get_option("server.maxUploadSize"))
+    except (TypeError, ValueError):
+        return inputs.format_upload_cap(5000 if _LOCAL else 500)
+
+
+_UPLOAD_CAP = _upload_cap()
+
+
 def _list_folder_images(folder):
     """Image files in a local folder matching the accepted upload types."""
     import glob
@@ -404,8 +424,8 @@ with st.sidebar:
                          type="primary" if _active else "secondary"):
                 st.session_state.active_view = _key
                 st.rerun()
-    _status = ("Local · 5 GB cap · folder input" if _LOCAL
-               else "Hosted · 500 MB upload cap")
+    _status = (f"Local · {_UPLOAD_CAP} cap · folder input" if _LOCAL
+               else f"Hosted · {_UPLOAD_CAP} upload cap")
     st.markdown(styles.footer_html(_status, "v2.0 · SAM2 + watershed"),
                 unsafe_allow_html=True)
 
@@ -832,8 +852,8 @@ elif _view == "local":
     ), unsafe_allow_html=True)
     st.markdown(
         "**Why:** this hosted app runs on a shared server, so it can't reach files "
-        "on your computer and it caps uploads (500 MB here). Large scans — like a "
-        "2 GB curvature image — won't upload.\n\n"
+        f"on your computer and it caps uploads ({_UPLOAD_CAP} here), so a larger scan "
+        "— a multi-gigabyte curvature image, say — won't upload.\n\n"
         "**Fix:** fibermorph is an ordinary Python package, and this whole interface "
         "ships with it. Install it once and launch the *same* app on your own "
         "machine — Streamlit runs perfectly well locally — where there's no upload "
@@ -848,7 +868,7 @@ elif _view == "local":
         "**“Folder on disk”** option — choose it, paste the path to your images, and "
         "they are read directly from disk (no upload, any size).\n\n"
         "The `--local` flag matters: plain `fibermorph-gui` starts the app in hosted "
-        "mode (uploads only, 500 MB cap). Local mode lets anyone who can open the "
+        "mode (uploads only, no folder input). Local mode lets anyone who can open the "
         "page read folders on the machine it runs on, so it listens on localhost "
         "only — don't use it on a shared server."
     )
@@ -856,11 +876,11 @@ elif _view == "local":
         st.success(
             "✅ You're running locally right now — the **Folder on disk** option is "
             "available on the Cross-Section and Curvature tabs, and uploads are "
-            "raised to 5 GB."
+            f"capped at {_UPLOAD_CAP}."
         )
     else:
         st.info(
-            "You're on the hosted app (upload-only, 500 MB). Follow the steps above "
+            f"You're on the hosted app (upload-only, {_UPLOAD_CAP}). Follow the steps above "
             "(including `fibermorph-gui --local`) to run locally for large images."
         )
     st.caption(

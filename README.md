@@ -130,6 +130,9 @@ for you.)
 >   line, which outranks `.streamlit/config.toml`. If the environment variable
 >   `STREAMLIT_SERVER_MAX_UPLOAD_SIZE` is set, the launcher passes nothing and that
 >   value is used. To change the cap otherwise, add e.g. `--server.maxUploadSize 200`.
+>   The cap the app shows in its sidebar and Run Local view is read from Streamlit's
+>   own setting, so it follows whichever of these you use (500 MB and 5 GB are only
+>   the launcher's defaults).
 > - In local mode `--server.address localhost` is always passed, so
 >   `STREAMLIT_SERVER_ADDRESS` and `config.toml` cannot open folder input to other
 >   machines by accident. To listen elsewhere, add `--server.address <address>` to

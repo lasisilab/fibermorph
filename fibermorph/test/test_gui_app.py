@@ -364,3 +364,51 @@ def test_run_local_view_status_hosted_vs_local(monkeypatch):
     assert any("--local" in i.value for i in hosted.info)
     local = _run_app(monkeypatch, local=True, view="local")
     assert any("running locally" in s.value for s in local.success)
+
+
+# ---------------------------------------------------------------------------
+# The upload cap shown in the app is the cap Streamlit enforces
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def set_upload_cap():
+    """Set Streamlit's server.maxUploadSize (in MB) for one test, then restore it."""
+    from streamlit import config
+    original = config.get_option("server.maxUploadSize")
+
+    def setter(megabytes):
+        config.set_option("server.maxUploadSize", megabytes)
+
+    yield setter
+    config.set_option("server.maxUploadSize", original)
+
+
+@pytest.mark.parametrize("megabytes, shown", [
+    (500, "500 MB"), (2000, "2 GB"), (750, "750 MB"),
+])
+def test_hosted_text_follows_the_configured_upload_cap(monkeypatch, set_upload_cap, megabytes, shown):
+    set_upload_cap(megabytes)
+    at = _run_app(monkeypatch, local=False, view="local")
+    footer = [m.value for m in at.sidebar.markdown if "fm-foot__status" in m.value]
+    assert len(footer) == 1 and f"Hosted · {shown} upload cap" in footer[0]
+    body = "\n".join(m.value for m in at.markdown)
+    assert f"caps uploads ({shown} here)" in body
+    assert any(f"upload-only, {shown}" in i.value for i in at.info)
+    others = {"500 MB", "2 GB", "750 MB", "5 GB"} - {shown}
+    page = "\n".join(_rendered_text(at))
+    assert not [o for o in others if o in page], [o for o in others if o in page]
+
+
+@pytest.mark.parametrize("megabytes, shown", [
+    (5000, "5 GB"), (2000, "2 GB"), (300, "300 MB"),
+])
+def test_local_text_follows_the_configured_upload_cap(monkeypatch, set_upload_cap, megabytes, shown):
+    set_upload_cap(megabytes)
+    at = _run_app(monkeypatch, local=True, view="local")
+    footer = [m.value for m in at.sidebar.markdown if "fm-foot__status" in m.value]
+    assert len(footer) == 1 and f"Local · {shown} cap · folder input" in footer[0]
+    assert any(f"capped at {shown}" in s.value for s in at.success)
+    others = {"500 MB", "2 GB", "300 MB", "5 GB"} - {shown}
+    page = "\n".join(_rendered_text(at))
+    assert not [o for o in others if o in page], [o for o in others if o in page]
+

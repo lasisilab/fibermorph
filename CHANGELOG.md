@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Help text for the Taubin window and CLAHE controls in the GUI.
 
 ### Changed
+- **The upload cap shown in the GUI is the cap Streamlit enforces.** The sidebar
+  status and the Run Local view used to say "500 MB" (hosted) or "5 GB" (local)
+  whatever cap was set. They now read Streamlit's `server.maxUploadSize`, so a
+  host that sets `STREAMLIT_SERVER_MAX_UPLOAD_SIZE`, `--server.maxUploadSize` or
+  `config.toml` sees the same number in the app as in the file uploader. With no
+  setting, the text is the same as before (500 MB hosted, 5 GB local).
 - **GUI is now a sidebar console** with four views — **Cross-Section**,
   **Curvature**, **Run Local**, **Run Remote** — replacing the previous top tab
   bar (there is no "Submit & Monitor" or "Results" tab).

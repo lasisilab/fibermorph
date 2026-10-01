@@ -21,6 +21,18 @@ UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
+def format_upload_cap(megabytes) -> str:
+    """Format an upload cap given in MB for display to people using the app.
+
+    Whole thousands of MB are shown in GB (``5000`` -> ``"5 GB"``); anything
+    else stays in MB (``500`` -> ``"500 MB"``, ``2500`` -> ``"2500 MB"``).
+    """
+    mb = int(megabytes)
+    if mb >= 1000 and mb % 1000 == 0:
+        return f"{mb // 1000} GB"
+    return f"{mb} MB"
+
+
 def display_name(client_name, fallback: str = "upload") -> str:
     """Reduce a client-supplied filename to a safe label for display.
 
