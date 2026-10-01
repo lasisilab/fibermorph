@@ -12,7 +12,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > tagged. At release time these entries can be folded into 2.0.0 or tagged a
 > new version.
 
+### Breaking Changes
+- **`fibermorph-gui` now starts in hosted mode; local mode requires `--local`.**
+  Before, every `fibermorph-gui` launch silently enabled local mode: it set
+  `FIBERMORPH_LOCAL=1`, showed a "Folder on disk" input that reads folders on the
+  machine running the app, and raised the upload cap to 5 GB. Now plain
+  `fibermorph-gui` starts hosted mode: uploads only, a 500 MB upload cap
+  (`--server.maxUploadSize 500`), no folder input, and `FIBERMORPH_LOCAL` is left
+  unset. To run on your own machine as before, use
+  `fibermorph-gui --local` (or set `FIBERMORPH_LOCAL=1` in the environment), which
+  also now listens on `localhost` only (`--server.address localhost`). Servers and
+  containers that start the app with `fibermorph-gui` (for example the repository's
+  Dockerfile) therefore now get hosted mode instead of exposing server folders to
+  every visitor. Hosted mode passes no address or port, so settings such as the
+  Dockerfile's `STREAMLIT_SERVER_PORT=7860` and `STREAMLIT_SERVER_ADDRESS=0.0.0.0`
+  still apply. A container started with `FIBERMORPH_LOCAL=1` now listens on
+  `localhost` only and needs `--server.address 0.0.0.0` on the command to be
+  reachable.
+- **Hosted visitors can no longer set the SAM2 checkpoint.** In hosted mode
+  (plain `fibermorph-gui`) the Cross-Section view has no "SAM2 checkpoint path"
+  box: the server always uses `SAM2_CHECKPOINT`, or the packaged default path, and
+  its path is not shown in any view (the Run Remote view's checkpoint box now
+  starts empty). A host that wants SAM2 segmentation must set `SAM2_CHECKPOINT`
+  (or put the file at the default path) on a machine with a GPU, and restart the
+  app after changing it. Local mode (`--local`) is unchanged. Details are in
+  **Security** below.
+- **How the launcher's server options interact with Streamlit's settings.**
+  `--server.maxUploadSize` (500 MB hosted, 5000 MB local) is passed on the command
+  line, so it overrides `.streamlit/config.toml`; it is not passed when the
+  `STREAMLIT_SERVER_MAX_UPLOAD_SIZE` environment variable is set, so a host can set
+  its own cap that way. In local mode `--server.address localhost` is always passed
+  and overrides `STREAMLIT_SERVER_ADDRESS` and `config.toml`, so folder input is
+  never opened to other machines by accident; pass `--server.address <address>` to
+  `fibermorph-gui` to change it, and the startup notice then warns that the app is
+  reachable from other machines. An empty `--server.address=` counts as changing
+  it: Streamlit then listens on every interface, and the notice says so.
+
 ### Added
+- **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
+  passed through to `streamlit run` after the launcher's own options, so they can
+  override them (e.g. `fibermorph-gui --local --server.port 8600`). Before, every
+  extra argument was silently ignored.
 - **Resolution in either direction.** GUI and CLI now accept resolution as
   pixels-per-unit *or* unit-per-pixel and convert internally — GUI unit selector
   (px/µm ↔ µm/px, px/mm ↔ mm/px), CLI `--resolution_mu_units {px_per_um,um_per_px}`
@@ -23,10 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fiber fragment's length and mean/median curvature (one row per fragment), a
   per-image summary, and per-sample + pooled distribution histograms (shared
   x-axis for cross-sample comparison).
-- **Run Local.** `fibermorph-gui` runs the same GUI on your own machine with the
-  upload cap raised to 5 GB and a "Folder on disk" input that reads images
+- **Run Local.** `fibermorph-gui --local` runs the same GUI on your own machine
+  with the upload cap raised to 5 GB and a "Folder on disk" input that reads images
   straight from a directory (no upload). A Run Local view documents this and
   shows whether you are running hosted or local.
+- `fibermorph.gui.inputs`: `save_uploads()`, `display_name()`, `safe_extension()`
+  and `restore_names()` for saving uploaded files under generated names and
+  putting the uploaded name back into error messages, plus `format_upload_cap()`
+  for showing the upload cap as "500 MB" or "5 GB" (all usable and testable
+  without running Streamlit).
+- `fibermorph-gui --help` documents `--local`; the launcher prints which mode it
+  is starting in.
 - **Lasisi Lab GUI design system** (`fibermorph.gui.styles`): a left sidebar
   console (brand lockup, grouped nav with SVG glyphs, status footer), per-view
   headers, at-a-glance metric cards, and brand-colored charts.
@@ -42,6 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `fibermorph/test/test_data/curv_golden/`.
 
 ### Changed
+- **The upload cap shown in the GUI is the cap Streamlit enforces.** The sidebar
+  status and the Run Local view used to say "500 MB" (hosted) or "5 GB" (local)
+  whatever cap was set. They now read Streamlit's `server.maxUploadSize`, so a
+  host that sets `STREAMLIT_SERVER_MAX_UPLOAD_SIZE`, `--server.maxUploadSize` or
+  `config.toml` sees the same number in the app as in the file uploader. With no
+  setting, the text is the same as before (500 MB hosted, 5 GB local).
 - **GUI is now a sidebar console** with four views — **Cross-Section**,
   **Curvature**, **Run Local**, **Run Remote** — replacing the previous top tab
   bar (there is no "Submit & Monitor" or "Results" tab).
@@ -106,6 +159,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the GUI and docstrings — the cause of "empty mask" segmentation failures on
   correctly-focused images.
 - US spelling throughout the GUI (analyze, fiber, color).
+- **Uploads with the same filename were all measured as the last one.** The GUI
+  saved each upload to a temporary path named after the uploaded file, so two
+  uploads with the same name overwrote each other and both result rows measured
+  the second file, even though the on-screen warning said each file is measured
+  separately. Uploads are now saved under distinct generated names, and each is
+  measured on its own; `source_file` (and the `ID` / `mask_filename` columns of
+  cross-section results, the mask previews, the curvature tables and the error
+  messages shown for a file) still show the uploaded filename.
+
+### Security
+- **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the
+  Cross-Section view's settings, the "SAM2 checkpoint path" text box is now shown
+  only in local mode. In hosted mode the server's own checkpoint (`SAM2_CHECKPOINT`,
+  or the packaged default path) is always used, and a caption says whether a
+  checkpoint file was found (and that SAM2 also needs a GPU on the server), without
+  showing the server path. Before, any visitor could type a path and the server
+  would try to load that file as a model. The server's
+  checkpoint path is not shown in any hosted view: the Run Remote view's
+  "SAM2 checkpoint path" box, which only fills in the generated SBATCH script text
+  and is never loaded by the server, now starts empty in hosted mode (in local mode
+  it is still pre-filled), and the script uses `YOUR_SAM2_CHECKPOINT` there if the
+  box is left blank. The first SAM2 model the server loads is kept for the life of
+  the process, so restart the app after changing `SAM2_CHECKPOINT` or replacing the
+  checkpoint file.
+- **Uploaded filenames are no longer used to build paths on the server.** The
+  GUI wrote each upload to `<temp dir>/<uploaded filename>`, so a crafted name
+  (an absolute path, `..` segments, Windows `\` separators) could write outside the
+  temporary directory. Uploads are now written as `upload_0001.<ext>`,
+  `upload_0002.<ext>`, ... directly inside the temporary directory (the original
+  extension is kept only if it is tif, tiff, png, jpg or jpeg); the uploaded
+  filename is used only as a display label, reduced to its last path component.
 
 ## [2.0.0] - 2026-05-14
 

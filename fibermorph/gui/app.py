@@ -11,8 +11,8 @@ Four tabs:
 
   Run Local        — how to install and launch this same GUI on your own
                      machine (no upload limit; read images straight from a
-                     folder on disk). Those extra options appear automatically
-                     when launched via `fibermorph-gui`.
+                     folder on disk). Those extra options appear only when
+                     launched via `fibermorph-gui --local`.
 
   Run Remote       — documentation + an SBATCH script scaffold for running the
                      fibermorph CLI on an HPC cluster. It generates a script to
@@ -20,7 +20,10 @@ Four tabs:
                      or connect to any cluster.
 
 Start via:
-  fibermorph-gui
+  fibermorph-gui            # hosted mode: uploads only, 500 MB default cap
+  fibermorph-gui --local    # local mode: folder input, 5 GB default cap, localhost only
+  # (the cap shown in the app is Streamlit's server.maxUploadSize, so it follows
+  # STREAMLIT_SERVER_MAX_UPLOAD_SIZE or --server.maxUploadSize if you set one)
   # or directly:
   python -m streamlit run fibermorph/gui/app.py --server.port 8501
 """
@@ -35,7 +38,7 @@ import pandas as pd
 import streamlit as st
 
 from fibermorph.utils.units import resolution_to_px_per_unit
-from fibermorph.gui import styles
+from fibermorph.gui import inputs, styles
 
 # ---------------------------------------------------------------------------
 # Page config — must be the first Streamlit call
@@ -99,11 +102,17 @@ def _process_section_gui(
     use_sam2: bool,
     sam2_checkpoint: str,
     return_mask: bool = False,
+    display_name: str | None = None,
 ):
     """Run section analysis on a single image.
 
     Returns dict of measurements, or (dict, gray_img, mask_uint8) when
     return_mask=True. Returns None if no cross-section was detected.
+
+    display_name is the image's name as the user knows it (for an upload, the
+    uploaded filename, not the generated name of the temporary file). It is
+    recorded in the result's ID and mask_filename fields; it defaults to the
+    basename of tmp_path.
     """
     import cv2
     from fibermorph.processing.section_sam2 import segment_section
@@ -135,7 +144,9 @@ def _process_section_gui(
 
     mask_uint8, confidence, method = seg_result
 
-    df = section_props_extended(mask_uint8, os.path.basename(tmp_path), resolution_mu)
+    df = section_props_extended(
+        mask_uint8, display_name or os.path.basename(tmp_path), resolution_mu
+    )
     if df is None or df.empty:
         return None
 
@@ -213,10 +224,29 @@ def _warn_duplicate_names(names):
 
 # ---------------------------------------------------------------------------
 # Local mode: read images straight from a folder on disk (no upload, no size
-# cap). Only offered when the app was launched via `fibermorph-gui` on the
-# user's own machine — the hosted cloud app stays upload-only.
+# cap). Only offered when the app was launched with `fibermorph-gui --local`
+# (which sets FIBERMORPH_LOCAL=1) on the user's own machine — a hosted app stays
+# upload-only, because local mode lets every visitor read folders on the server.
 # ---------------------------------------------------------------------------
 _LOCAL = os.environ.get("FIBERMORPH_LOCAL") == "1"
+
+
+def _upload_cap() -> str:
+    """The upload cap Streamlit is enforcing, as text for the page ("500 MB",
+    "5 GB").
+
+    Read from Streamlit's own setting, so it follows whatever the host chose
+    (the launcher's default, STREAMLIT_SERVER_MAX_UPLOAD_SIZE,
+    --server.maxUploadSize or config.toml) and always matches the limit the
+    file uploader shows.
+    """
+    try:
+        return inputs.format_upload_cap(st.get_option("server.maxUploadSize"))
+    except (TypeError, ValueError):
+        return inputs.format_upload_cap(5000 if _LOCAL else 500)
+
+
+_UPLOAD_CAP = _upload_cap()
 
 
 def _list_folder_images(folder):
@@ -265,18 +295,13 @@ def _gather_inputs(source, tmpdir):
     """Turn a picker result into a list of (display_name, filepath).
 
     Folder mode reads paths directly from disk; upload mode persists each
-    uploaded file into tmpdir first.
+    uploaded file into tmpdir first, under a generated name (the client's
+    filename is only used as the display name — see fibermorph.gui.inputs).
     """
     mode, payload = source
     if mode == "folder":
         return [(os.path.basename(p), p) for p in _list_folder_images(payload)]
-    out = []
-    for up in payload or []:
-        p = os.path.join(tmpdir, up.name)
-        with open(p, "wb") as fh:
-            fh.write(up.read())
-        out.append((up.name, p))
-    return out
+    return inputs.save_uploads(payload, tmpdir)
 
 
 def _source_is_empty(source):
@@ -379,7 +404,7 @@ _FILENAME_NOTE = (
     "at a time and does no grouping — name your files however you'll want to group "
     "them (within/between individual) in your own downstream analysis."
 )
-_UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
+_UPLOAD_TYPES = inputs.UPLOAD_TYPES
 
 # ---------------------------------------------------------------------------
 # Sidebar: brand + navigation + status (replaces the top tab bar)
@@ -399,8 +424,8 @@ with st.sidebar:
                          type="primary" if _active else "secondary"):
                 st.session_state.active_view = _key
                 st.rerun()
-    _status = ("Local · 5 GB cap · folder input" if _LOCAL
-               else "Hosted · 500 MB upload cap")
+    _status = (f"Local · {_UPLOAD_CAP} cap · folder input" if _LOCAL
+               else f"Hosted · {_UPLOAD_CAP} upload cap")
     st.markdown(styles.footer_html(_status, "v2.0 · SAM2 + watershed"),
                 unsafe_allow_html=True)
 
@@ -438,7 +463,22 @@ if _view == "section":
         sec_res_mu   = resolution_to_px_per_unit(sec_res_val, sec_res_unit)
         st.caption(f"Working resolution: **{sec_res_mu:.4g} px/µm**")
         sec_sam2     = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
-        sec_ckpt     = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
+        if _LOCAL:
+            sec_ckpt = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
+        else:
+            # Hosted: visitors must not choose which file the server loads as a
+            # model, so use the server-configured checkpoint and don't show its path.
+            sec_ckpt = _DEFAULT_CHECKPOINT
+            # Only the checkpoint file is checked here; SAM2 also needs the sam2
+            # package and a CUDA GPU on the server, and without them the app
+            # uses watershed whatever the checkpoint says.
+            st.caption(
+                "SAM2 checkpoint: file found on this server. SAM2 also needs a "
+                "GPU on the server; without one the app uses watershed."
+                if os.path.isfile(sec_ckpt) else
+                "SAM2 checkpoint: no file found on this server, so SAM2 "
+                "segmentation falls back to watershed."
+            )
 
     if st.button("▶ Analyze cross-sections", type="primary", key="sec_run"):
         if _source_is_empty(sec_source):
@@ -464,9 +504,10 @@ if _view == "section":
                             use_sam2=bool(sec_sam2),
                             sam2_checkpoint=str(sec_ckpt),
                             return_mask=True,
+                            display_name=name,
                         )
                     except Exception as e:
-                        st.warning(f"{name}: {e}")
+                        st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
                         out = None
 
                     if out is not None:
@@ -661,7 +702,7 @@ elif _view == "curvature":
                             extended=bool(curv_ext),
                         )
                     except Exception as e:
-                        st.warning(f"{name}: {e}")
+                        st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
                         result = None
 
                     frags = result.get("fragments") if result else None
@@ -815,32 +856,36 @@ elif _view == "local":
     ), unsafe_allow_html=True)
     st.markdown(
         "**Why:** this hosted app runs on a shared server, so it can't reach files "
-        "on your computer and it caps uploads (500 MB here). Large scans — like a "
-        "2 GB curvature image — won't upload.\n\n"
+        f"on your computer and it caps uploads ({_UPLOAD_CAP} here), so a larger scan "
+        "— a multi-gigabyte curvature image, say — won't upload.\n\n"
         "**Fix:** fibermorph is an ordinary Python package, and this whole interface "
         "ships with it. Install it once and launch the *same* app on your own "
         "machine — Streamlit runs perfectly well locally — where there's no upload "
         "limit and you can point it straight at a folder of images:\n\n"
         "```bash\n"
         "pip install 'fibermorph[gui]'\n"
-        "fibermorph-gui\n"
+        "fibermorph-gui --local\n"
         "```\n\n"
         "That opens the identical interface in your browser at "
         "`http://localhost:8501`, but running on your computer. On the "
         "**Cross-Section** and **Curvature** tabs you then get an extra "
         "**“Folder on disk”** option — choose it, paste the path to your images, and "
-        "they are read directly from disk (no upload, any size)."
+        "they are read directly from disk (no upload, any size).\n\n"
+        "The `--local` flag matters: plain `fibermorph-gui` starts the app in hosted "
+        "mode (uploads only, no folder input). Local mode lets anyone who can open the "
+        "page read folders on the machine it runs on, so it listens on localhost "
+        "only — don't use it on a shared server."
     )
     if _LOCAL:
         st.success(
             "✅ You're running locally right now — the **Folder on disk** option is "
             "available on the Cross-Section and Curvature tabs, and uploads are "
-            "raised to 5 GB."
+            f"capped at {_UPLOAD_CAP}."
         )
     else:
         st.info(
-            "You're on the hosted app (upload-only, 500 MB). Follow the steps above "
-            "to run locally for large images."
+            f"You're on the hosted app (upload-only, {_UPLOAD_CAP}). Follow the steps above "
+            "(including `fibermorph-gui --local`) to run locally for large images."
         )
     st.caption(
         "No GPU or cluster needed — this runs on an ordinary laptop or desktop. For "
@@ -914,7 +959,16 @@ elif _view == "remote":
         resolution_mu  = resolution_to_px_per_unit(sec_res_val_b, sec_res_unit_b)
         st.caption(f"Script will pass **--resolution_mu {resolution_mu:.4g}** (px/µm).")
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
-        sam2_checkpoint = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT)
+        # This value only goes into the generated script text for another machine.
+        # Hosted: don't pre-fill the server's own checkpoint path (it is not
+        # useful on a cluster and visitors must not see it); leave it empty.
+        sam2_checkpoint = st.text_input(
+            "SAM2 checkpoint path",
+            value=_DEFAULT_CHECKPOINT if _LOCAL else "",
+            placeholder="/path/to/sam2.1_hiera_tiny.pt",
+            help="Path to the SAM2 checkpoint on the machine you'll run on. Left "
+                 "blank, the script uses YOUR_SAM2_CHECKPOINT for you to fill in.",
+        )
         ext_features    = st.toggle(
             "Extended features (EFD, Hu moments, radial profile, shape class)", value=True
         )
@@ -984,9 +1038,10 @@ elif _view == "remote":
                     f"    --jobs {int(slurm_cpus)}",
                 ]
                 if use_sam2:
+                    ckpt_arg = sam2_checkpoint.strip() or "YOUR_SAM2_CHECKPOINT"
                     sec_flags += [
                         "    --use-sam2",
-                        f"    --sam2-checkpoint '{sam2_checkpoint}'",
+                        f"    --sam2-checkpoint '{ckpt_arg}'",
                     ]
                 if ext_features:
                     sec_flags.append("    --extended-features")
