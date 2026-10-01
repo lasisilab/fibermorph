@@ -27,7 +27,7 @@ git checkout -b my-feature upstream/fibermorph-dev
 python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.10–3.12
 pip install -e '.[gui]'      # editable install with the GUI extra
 pytest                       # run the test suite
-fibermorph-gui               # launch the GUI locally
+fibermorph-gui --local       # launch the GUI locally (without --local: hosted mode)
 ```
 
 ## Pull requests

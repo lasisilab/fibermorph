@@ -11,7 +11,7 @@ fibermorph provides powerful image analysis tools for studying fiber curvature a
 - **Streamlit GUI** with a sidebar console: **Cross-Section**, **Curvature**, **Run Local**, and **Run Remote** views
 - **Per-fragment curvature** in the GUI — each fiber fragment's length and curvature, plus per-image summaries and distribution histograms
 - **Flexible resolution units** — enter px/µm or µm/px (px/mm or mm/px) in the GUI or CLI and it converts for you
-- **Run locally for large images** — `fibermorph-gui` raises the upload cap and adds a "Folder on disk" input (read images straight from disk)
+- **Run locally for large images** — `fibermorph-gui --local` raises the upload cap to 5 GB and adds a "Folder on disk" input (read images straight from disk)
 - **SAM2 GPU segmentation** for cross-sections (optional; falls back to watershed on CPU), with extended shape features (`--extended-features`)
 - **CLAHE preprocessing** for curvature images with uneven illumination (`--use-clahe`)
 - **SBATCH script generation** from the GUI's Run Remote view (build & download — you submit it yourself)
@@ -29,9 +29,11 @@ conda activate fibermorph_env
 # Install fibermorph with the GUI
 pip install "fibermorph[gui]"
 
-# Launch the interactive GUI
-fibermorph-gui
+# Launch the interactive GUI on your own machine
+fibermorph-gui --local
 ```
+
+> `fibermorph-gui` without `--local` starts the app in *hosted* mode (uploads only, 500 MB cap, no access to folders on the computer running it). Use `--local` when you run it on your own machine; see [Run locally from source](#-run-locally-from-source).
 
 The sidebar console has four views:
 - **Cross-Section**: upload images, segment (SAM2 / watershed) and measure cross-section shape — results and mask previews appear inline
@@ -100,14 +102,36 @@ git clone https://github.com/lasisilab/fibermorph.git
 cd fibermorph
 python3.12 -m venv .venv && source .venv/bin/activate   # Python 3.10–3.12
 pip install -e '.[gui]'        # editable install of this working copy
-fibermorph-gui                 # opens the local GUI at http://localhost:8501
+fibermorph-gui --local         # opens the local GUI at http://localhost:8501
 ```
 
-Launched this way, the GUI runs on your own machine with the upload cap raised to
-**5 GB** and a **"Folder on disk"** input on the Cross-Section and Curvature views,
-so you can analyze images that are too large to upload to the hosted app. (On a
-machine's first-ever Streamlit run it may briefly ask for an email — the launcher
-skips that for you.)
+Launched with `--local`, the GUI runs on your own machine with the upload cap raised
+to **5 GB** and a **"Folder on disk"** input on the Cross-Section and Curvature views,
+so you can analyze images that are too large to upload to the hosted app. Local mode
+listens on `localhost` only. (On a machine's first-ever Streamlit run it may briefly
+ask for an email — the launcher skips that for you.)
+
+> **`--local` is for your own computer, not for servers.** Plain `fibermorph-gui`
+> (no flag) starts the app in hosted mode: uploads only, a 500 MB upload cap, and no
+> "Folder on disk" input. Local mode lets anyone who can open the page read folders on
+> the machine it runs on, so don't expose it on a shared server. Setting the environment
+> variable `FIBERMORPH_LOCAL=1` is equivalent to passing `--local`.
+>
+> Any other arguments to `fibermorph-gui` are passed through to `streamlit run` after
+> the launcher's own options, so they can override them, for example
+> `fibermorph-gui --local --server.port 8600`. (Before this, extra arguments were
+> ignored.) How the launcher's options interact with Streamlit's other settings:
+>
+> - `--server.maxUploadSize` (500 MB hosted, 5000 MB local) is passed on the command
+>   line, which outranks `.streamlit/config.toml`. If the environment variable
+>   `STREAMLIT_SERVER_MAX_UPLOAD_SIZE` is set, the launcher passes nothing and that
+>   value is used. To change the cap otherwise, add e.g. `--server.maxUploadSize 200`.
+> - In local mode `--server.address localhost` is always passed, so
+>   `STREAMLIT_SERVER_ADDRESS` and `config.toml` cannot open folder input to other
+>   machines by accident. To listen elsewhere, add `--server.address <address>` to
+>   the command (the launcher then prints a warning).
+> - Hosted mode passes no address or port, so Streamlit's usual settings
+>   (`STREAMLIT_SERVER_ADDRESS`, `STREAMLIT_SERVER_PORT`, `config.toml`) apply.
 
 The CLI works from the same checkout too: `fibermorph --help`.
 

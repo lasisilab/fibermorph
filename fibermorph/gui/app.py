@@ -11,8 +11,8 @@ Four tabs:
 
   Run Local        — how to install and launch this same GUI on your own
                      machine (no upload limit; read images straight from a
-                     folder on disk). Those extra options appear automatically
-                     when launched via `fibermorph-gui`.
+                     folder on disk). Those extra options appear only when
+                     launched via `fibermorph-gui --local`.
 
   Run Remote       — documentation + an SBATCH script scaffold for running the
                      fibermorph CLI on an HPC cluster. It generates a script to
@@ -20,7 +20,8 @@ Four tabs:
                      or connect to any cluster.
 
 Start via:
-  fibermorph-gui
+  fibermorph-gui            # hosted mode: uploads only, 500 MB cap
+  fibermorph-gui --local    # local mode: folder input, 5 GB cap, localhost only
   # or directly:
   python -m streamlit run fibermorph/gui/app.py --server.port 8501
 """
@@ -213,8 +214,9 @@ def _warn_duplicate_names(names):
 
 # ---------------------------------------------------------------------------
 # Local mode: read images straight from a folder on disk (no upload, no size
-# cap). Only offered when the app was launched via `fibermorph-gui` on the
-# user's own machine — the hosted cloud app stays upload-only.
+# cap). Only offered when the app was launched with `fibermorph-gui --local`
+# (which sets FIBERMORPH_LOCAL=1) on the user's own machine — a hosted app stays
+# upload-only, because local mode lets every visitor read folders on the server.
 # ---------------------------------------------------------------------------
 _LOCAL = os.environ.get("FIBERMORPH_LOCAL") == "1"
 
@@ -823,13 +825,17 @@ elif _view == "local":
         "limit and you can point it straight at a folder of images:\n\n"
         "```bash\n"
         "pip install 'fibermorph[gui]'\n"
-        "fibermorph-gui\n"
+        "fibermorph-gui --local\n"
         "```\n\n"
         "That opens the identical interface in your browser at "
         "`http://localhost:8501`, but running on your computer. On the "
         "**Cross-Section** and **Curvature** tabs you then get an extra "
         "**“Folder on disk”** option — choose it, paste the path to your images, and "
-        "they are read directly from disk (no upload, any size)."
+        "they are read directly from disk (no upload, any size).\n\n"
+        "The `--local` flag matters: plain `fibermorph-gui` starts the app in hosted "
+        "mode (uploads only, 500 MB cap). Local mode lets anyone who can open the "
+        "page read folders on the machine it runs on, so it listens on localhost "
+        "only — don't use it on a shared server."
     )
     if _LOCAL:
         st.success(
@@ -840,7 +846,7 @@ elif _view == "local":
     else:
         st.info(
             "You're on the hosted app (upload-only, 500 MB). Follow the steps above "
-            "to run locally for large images."
+            "(including `fibermorph-gui --local`) to run locally for large images."
         )
     st.caption(
         "No GPU or cluster needed — this runs on an ordinary laptop or desktop. For "
