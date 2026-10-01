@@ -20,6 +20,11 @@ def filter_curv(
 ) -> Tuple[np.ndarray, str]:
     """Uses a ridge filter to extract curved (or straight) lines from background noise.
 
+    The ridge filter is the Frangi filter as implemented in scikit-image 0.16.2
+    (``fibermorph.core.frangi_v016.frangi_v016``), so this step gives the same
+    output as the published fibermorph method (v0.3.1) whichever scikit-image
+    version is installed.
+
     Parameters
     ----------
     input_file : str or pathlib.Path
@@ -38,14 +43,18 @@ def filter_curv(
     """
     from ..io.readers import imread
     from ..utils.filesystem import make_subdirectory
+    from .frangi_v016 import frangi_v016
     
     # create pathlib object for input Image
     input_path = pathlib.Path(input_file)
 
     gray_img, im_name = imread(input_path)
 
-    # use frangi ridge filter to find hairs, the output will be inverted
-    filter_img = skimage.filters.frangi(gray_img)
+    # Use the Frangi ridge filter as scikit-image 0.16.2 computed it (the
+    # version behind the published fibermorph results), not the installed
+    # skimage.filters.frangi, whose output changed in later releases. See
+    # fibermorph/core/frangi_v016.py. The output will be inverted.
+    filter_img = frangi_v016(gray_img)
     logger.debug(f"Filtered image size: {filter_img.shape}")
 
     if save_img:
@@ -70,6 +79,10 @@ def filter_curv_clahe(
     Applies CLAHE contrast enhancement before Frangi filtering and uses a
     masked-ROI Otsu threshold that excludes bright bands at the top/bottom
     15% of the frame (common artefact in microscopy strip images).
+
+    This option is not part of the published v0.3.1 method. It uses the
+    installed scikit-image ``frangi`` and therefore does not reproduce v0.3.1
+    results, and its output depends on the scikit-image version.
 
     Parameters
     ----------
