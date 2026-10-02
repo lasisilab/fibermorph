@@ -60,6 +60,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (which turned extended curvature on by default) contain
   `--extended-curvature` and must have it deleted. Details are in **Removed**
   below.
+- **A zero, negative or absurdly long `--window_size` now stops with an error.**
+  With `--window_unit px`, a zero or negative `--window_size` used to run: the
+  log said `less than 10 pixels, using full length` and every hair was measured
+  over its whole length. It now exits with code 2 and a usage message before any
+  analysis starts, whichever module is chosen. Use a window of 10 pixels or more,
+  or `--window_size none` (or leave the option out) to fit whole hairs. A script
+  that writes such a value, for example one downloaded from the Run Remote view
+  with a "Taubin window (px)" of 0 or less, needs a positive window. A window
+  longer than 1,000,000,000 pixels (for `mm`, after conversion with
+  `--resolution_mm`) is refused in the same way: no image has a hair that long.
+  Such a window used to run and measure nothing (`hair_count` 0), or, when it
+  was extremely long, end in a traceback (`OverflowError: cannot convert float
+  infinity to integer` or `OSError: File name too long`).
+- **A negative `--minsize` now stops with an error.**
+  `fibermorph --section --minsize -5` used to run, the negative value acting
+  as a lower bound of 0. It now exits with code 2 and a usage message before
+  any image is read, whichever module is chosen. Use `--minsize 0` or a
+  positive number. A script that writes a negative minimum, for example one
+  downloaded from the Run Remote view with a "Min diameter (µm)" below 0 (that
+  box has no lower limit), needs a value of 0 or more.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
@@ -218,6 +238,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured on its own; `source_file` (and the `ID` / `mask_filename` columns of
   cross-section results, the mask previews, the curvature tables and the error
   messages shown for a file) still show the uploaded filename.
+- **`fibermorph --curvature --window_size` no longer crashes.** The values were
+  read as text (the same bug is in the original v0.3.1 command line), so
+  `--window_unit mm` failed with `TypeError: can't multiply sequence by non-int
+  of type 'float'`, and `--window_size 50.0` with `--window_unit px` failed with
+  `ValueError: invalid literal for int()`; only whole numbers of pixels such as
+  `50` worked, by accident. `--window_size` is now read as numbers: one or more
+  values (a sweep such as `--window_size 25 50 100`), or `none` for the whole
+  hair, which is also the default when the option is left out. With
+  `--window_unit px` each value must be a whole number (`50` and `50.0` both
+  give 50); with `mm` it can be any number greater than 0 (`0.5`). A
+  non-numeric or non-finite value, a fraction of a pixel with `px`, or `none`
+  repeated or combined with numbers is reported as a usage error (exit code 2)
+  instead of a traceback; zero, negative and over-long windows (more than
+  1,000,000,000 pixels, the largest accepted) are covered under
+  **Breaking Changes**. A window shorter than 10 pixels (for `mm`, after
+  conversion with `--resolution_mm`) is not used as given: each hair is
+  measured over its whole length in one window, a warning is logged, and the
+  output is still named after the window you asked for (`..._WindowSize-0.001mm`).
+  The values are checked whichever module is run. Output file names are
+  unchanged (`..._WindowSize-50px`, `..._WindowSize-0.5mm`).
+  `fibermorph.cli.main` and `parse_args` now accept an optional list of
+  arguments (default: the command line).
+- **Out-of-range numbers on the command line now give a usage message instead of
+  a traceback.** These all ended in a traceback or an empty result: `--jobs 0`
+  (joblib: `n_jobs == 0 in Parallel has no meaning`); `--resolution_mm` or
+  `--resolution_mu` of 0, a negative number, `nan` or `inf` (`Resolution must be
+  greater than 0.`, `cannot convert float NaN to integer`, or `OverflowError`; a
+  zero or negative `--resolution_mm` also stopped `--section` and `--raw2gray`
+  runs, which do not use it; a `nan` or `inf` `--resolution_mu` with
+  `--section` ended in `KeyError: "None of ['ID'] are in the columns"` or in
+  exit code 0 with a table that has no rows); `--maxsize 0`; and a `--minsize`
+  larger than `--maxsize` (no section can match). They now exit with code 2
+  before any image is read, whichever module is chosen, and the message names
+  the option. The rules:
+  `--jobs` must not be 0 (`-1` for every CPU still works); `--resolution_mm` and
+  `--resolution_mu` must be finite and greater than 0, also after conversion
+  from `mm_per_px` or `um_per_px`; `--minsize` must be 0 or more, `--maxsize`
+  greater than 0, and `--minsize` no larger than `--maxsize`. A negative
+  `--minsize`, which used to run as if it were 0, is refused too (see
+  **Breaking Changes**). Not covered: a `--section` run whose limits are valid
+  but match no section (for example `--minsize 400 --maxsize 500` on images
+  with thinner hairs, or an absurdly large `--resolution_mu`) still ends in the
+  same `KeyError`; that comes from the section workflow, which is not changed
+  here.
 
 ### Security
 - **Hosted visitors can no longer choose the SAM2 checkpoint path.** In the

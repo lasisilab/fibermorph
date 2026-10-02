@@ -250,14 +250,22 @@ To run the demo, you will input something like:
 ### Curvature
 To calculate curvature from grayscale TIFF images of fibers, the flag `--curvature` is used with the following flags in addition to input and output directories:
 ```
---resolution_mm       	Integer. Number of pixels per mm for
+--resolution_mm       	Float. Number of pixels per mm for
 						curvature analysis.
-						Default is 132.
+						Default is 132. Must be greater than 0.
 --window_size  [ ...] 	Float or integer or None. Desired size for
 						window of measurement
 						for curvature analysis in pixels or mm (given
-						the flag --window_unit). If nothing is entered, the default
-						is None and the entire fiber will be used to for the curve fitting."
+						the flag --window_unit). Give several values
+						(e.g. 25 50 100) to measure each window size in turn.
+						With px each value must be a whole number (50 or 50.0);
+						with mm it can be any number greater than 0 (0.5).
+						A window shorter than 10 pixels (for mm, after conversion
+						with --resolution_mm) is not used: each fiber is measured
+						over its whole length in one window, with a warning.
+						A window longer than 1,000,000,000 pixels is refused.
+						If nothing is entered, or the value is 'none', the default
+						is None and the entire fiber will be used for the curve fitting.
 --window_unit {px,mm}	String. Unit of measurement for window of
 						measurement for curvature
                       	analysis. Can be 'px' (pixels) or 'mm'. Default is 'px'.
@@ -280,8 +288,11 @@ fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --o
 To calculate cross-sectional properties from grayscale TIFF images of fibers, the flag `--section` is used with the following flags:
 ```
 --resolution_mu       Float. Number of pixels per micron for section analysis. Default is 4.25.
+                      Must be greater than 0.
 --minsize             Integer. Minimum diameter in microns for sections. Default is 20.
+                      Must be 0 or more and no larger than --maxsize.
 --maxsize             Integer. Maximum diameter in microns for sections. Default is 150.
+                      Must be greater than 0.
 
 ```
 
@@ -306,3 +317,6 @@ A user could enter, for example:
 ```
 fibermorph --raw2gray --input_directory /Users/<UserName>/<ImageFolderPath> --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName> --file_extension .RW2 --jobs 4
 ```
+
+### Checks on numeric options
+Before any image is read, fibermorph checks the numeric options, whichever module is run, and stops with a usage message (exit code 2) if one is out of range: `--jobs` must not be 0 (use a positive number, or -1 for every CPU); `--resolution_mm` and `--resolution_mu` must be finite and greater than 0; `--minsize` must be 0 or more, `--maxsize` greater than 0, and `--minsize` no larger than `--maxsize`; and `--window_size` follows the rules listed under Curvature.
