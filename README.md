@@ -319,4 +319,4 @@ fibermorph --raw2gray --input_directory /Users/<UserName>/<ImageFolderPath> --ou
 ```
 
 ### Checks on numeric options
-Before any image is read, fibermorph checks the numeric options, whichever module is run, and stops with a usage message (exit code 2) if one is out of range: `--jobs` must not be 0 (use a positive number, or -1 for every CPU); `--resolution_mm` and `--resolution_mu` must be finite and greater than 0; `--minsize` must be 0 or more, `--maxsize` greater than 0, and `--minsize` no larger than `--maxsize`; and `--window_size` follows the rules listed under Curvature.
+Before any image is read, fibermorph checks the numeric options, whichever module is run, and stops with a usage message (exit code 2) if one is out of range: `--jobs` must not be 0 (use a positive number, or -1 for every CPU), and a number larger than the machine's CPU count is reduced to it with a message; `--resolution_mm` and `--resolution_mu` must be finite and greater than 0; `--minsize` must be 0 or more, `--maxsize` greater than 0, and `--minsize` no larger than `--maxsize`; and `--window_size` follows the rules listed under Curvature.

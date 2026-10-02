@@ -152,8 +152,19 @@ class TestNumericOptions:
         assert (args.minsize, args.maxsize) == (20, 150)
 
     @pytest.mark.parametrize("jobs", ["1", "4", "-1", "-2"])
-    def test_jobs_accepts_positive_numbers_and_joblibs_negative_ones(self, jobs):
+    def test_jobs_accepts_positive_numbers_and_joblibs_negative_ones(self, jobs, monkeypatch):
+        monkeypatch.setattr(cli.os, "cpu_count", lambda: 8)
         assert parse_args(BASE + ["--jobs", jobs]).jobs == int(jobs)
+
+    @pytest.mark.parametrize("jobs", ["9", "100000", "2147483648", "99999999999999999999"])
+    def test_jobs_above_cpu_count_is_reduced_to_cpu_count(self, jobs, monkeypatch, capsys):
+        monkeypatch.setattr(cli.os, "cpu_count", lambda: 8)
+        assert parse_args(BASE + ["--jobs", jobs]).jobs == 8
+        assert f"--jobs {jobs} is more than the 8 CPUs" in capsys.readouterr().err
+
+    def test_jobs_cap_handles_unknown_cpu_count(self, monkeypatch, capsys):
+        monkeypatch.setattr(cli.os, "cpu_count", lambda: None)
+        assert parse_args(BASE + ["--jobs", "4"]).jobs == 1
 
     def test_jobs_rejects_zero(self, capsys):
         err = _parse_error(capsys, "--jobs", "0")
@@ -274,7 +285,11 @@ class TestWindowSizeLimit:
         err = _parse_error(
             capsys, "--window_size", "1e8", "--window_unit", "mm", "--resolution_mm", "132"
         )
-        assert "1e+08 mm is 1.32e+10 pixels at --resolution_mm 132 px_per_mm" in err
+        assert "100000000 mm is 13,200,000,000 pixels at --resolution_mm 132 px_per_mm" in err
+
+    def test_px_message_shows_the_exact_window_just_over_the_limit(self, capsys):
+        err = _parse_error(capsys, "--window_size", str(MAX_WINDOW_PX + 1))
+        assert f"{MAX_WINDOW_PX + 1:,} px is longer than the largest window allowed" in err
 
     def test_mm_window_is_converted_with_a_mm_per_px_resolution(self, capsys):
         # 0.0076 mm per pixel is 131.58 pixels per mm: 100 mm is about 13 158 px
@@ -591,5 +606,20 @@ def test_module_run_accepts_jobs_minus_one(image_dir, tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
+    (summary,) = out_dir.glob("*_fibermorph_curvature/curvature_summary_data_*.csv")
+    assert list(pd.read_csv(summary)["ID"]) == ["synthetic_curv_WindowSize-50px"]
+
+
+def test_module_run_with_huge_jobs_runs_on_available_cpus(image_dir, tmp_path):
+    out_dir = tmp_path / "out"
+    result = _module_run(
+        "--curvature", "-i", str(image_dir), "-o", str(out_dir),
+        "--resolution_mm", str(RESOLUTION), "--window_size", "50",
+        "--jobs", "2147483648",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Traceback" not in result.stderr
+    assert "--jobs 2147483648 is more than the" in result.stderr
     (summary,) = out_dir.glob("*_fibermorph_curvature/curvature_summary_data_*.csv")
     assert list(pd.read_csv(summary)["ID"]) == ["synthetic_curv_WindowSize-50px"]

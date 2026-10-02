@@ -66,20 +66,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over its whole length. It now exits with code 2 and a usage message before any
   analysis starts, whichever module is chosen. Use a window of 10 pixels or more,
   or `--window_size none` (or leave the option out) to fit whole hairs. A script
-  that writes such a value, for example one downloaded from the Run Remote view
-  with a "Taubin window (px)" of 0 or less, needs a positive window. A window
+  that writes such a value, for example one downloaded earlier from the Run
+  Remote view with a "Taubin window (px)" of 0 or less (the view now refuses
+  such values), needs a positive window. A window
   longer than 1,000,000,000 pixels (for `mm`, after conversion with
   `--resolution_mm`) is refused in the same way: no image has a hair that long.
-  Such a window used to run and measure nothing (`hair_count` 0), or, when it
-  was extremely long, end in a traceback (`OverflowError: cannot convert float
-  infinity to integer` or `OSError: File name too long`).
+  Such a window used to run and measure nothing (`hair_count` 0), or end in a
+  traceback when it was extremely long.
 - **A negative `--minsize` now stops with an error.**
   `fibermorph --section --minsize -5` used to run, the negative value acting
   as a lower bound of 0. It now exits with code 2 and a usage message before
   any image is read, whichever module is chosen. Use `--minsize 0` or a
   positive number. A script that writes a negative minimum, for example one
-  downloaded from the Run Remote view with a "Min diameter (µm)" below 0 (that
-  box has no lower limit), needs a value of 0 or more.
+  downloaded earlier from the Run Remote view with a "Min diameter (µm)" below
+  0 (the view now refuses that), needs a value of 0 or more.
 
 ### Added
 - **Extra command-line arguments to `fibermorph-gui` reach Streamlit.** They are
@@ -272,7 +272,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   larger than `--maxsize` (no section can match). They now exit with code 2
   before any image is read, whichever module is chosen, and the message names
   the option. The rules:
-  `--jobs` must not be 0 (`-1` for every CPU still works); `--resolution_mm` and
+  `--jobs` must not be 0 (`-1` for every CPU still works), and a `--jobs` larger
+  than the machine's CPU count is reduced to that count with a message (a huge
+  value used to crash joblib with `OverflowError` or start thousands of worker
+  processes); `--resolution_mm` and
   `--resolution_mu` must be finite and greater than 0, also after conversion
   from `mm_per_px` or `um_per_px`; `--minsize` must be 0 or more, `--maxsize`
   greater than 0, and `--minsize` no larger than `--maxsize`. A negative

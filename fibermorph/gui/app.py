@@ -929,10 +929,18 @@ elif _view == "remote":
             "Section resolution", value=4.25, step=0.01, min_value=0.0001,
             key="batch_sec_res_val")
         sec_res_unit_b = col2.selectbox("Unit", ["px/µm", "µm/px"], key="batch_sec_res_unit")
-        min_diam       = col3.number_input("Min diameter (µm)", value=30.0,  step=1.0)
-        max_diam       = col4.number_input("Max diameter (µm)", value=150.0, step=1.0)
+        # Lower limits match the fibermorph CLI's checks (--minsize >= 0,
+        # --maxsize > 0), so the generated script never carries a value the CLI
+        # refuses.
+        min_diam       = col3.number_input("Min diameter (µm)", value=30.0,  step=1.0,
+                                           min_value=0.0)
+        max_diam       = col4.number_input("Max diameter (µm)", value=150.0, step=1.0,
+                                           min_value=1.0)
         resolution_mu  = resolution_to_px_per_unit(sec_res_val_b, sec_res_unit_b)
         st.caption(f"Script will pass **--resolution_mu {resolution_mu:.4g}** (px/µm).")
+        if int(min_diam) > int(max_diam):
+            st.warning("Min diameter is larger than Max diameter, so no cross-section "
+                       "could match; fibermorph will refuse this script.")
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
         # This value only goes into the generated script text for another machine.
         # Hosted: don't pre-fill the server's own checkpoint path (it is not
@@ -955,7 +963,7 @@ elif _view == "remote":
             key="batch_curv_res_val")
         curv_res_unit_b = col6.selectbox("Unit", ["px/mm", "mm/px"], key="batch_curv_res_unit")
         window_size     = col7.number_input(
-            "Taubin window (px)", value=50, step=5,
+            "Taubin window (px)", value=50, step=5, min_value=1,
             help="Length (in pixels) of the sliding window used to fit a circle "
                  "to the fiber (Taubin method) and measure local curvature. Larger "
                  "= smoother/more global; smaller = more local detail. Keep it well "

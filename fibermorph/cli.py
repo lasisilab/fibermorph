@@ -2,6 +2,7 @@
 
 import argparse
 import math
+import os
 import sys
 import logging
 
@@ -144,6 +145,10 @@ def check_numeric_options(args):
         reciprocal overflows when ``mm_per_px`` / ``um_per_px`` is converted
         to pixels per unit; ``--minsize`` is negative; ``--maxsize`` is not
         greater than 0; or ``--minsize`` is larger than ``--maxsize``.
+
+    A ``--jobs`` larger than the number of CPUs on this machine is reduced to
+    that number, with a message on stderr: more jobs gain nothing, and a huge
+    value makes joblib crash or start thousands of worker processes.
     """
     from .utils.units import resolution_to_px_per_unit
 
@@ -152,6 +157,17 @@ def check_numeric_options(args):
             "argument --jobs: must not be 0 (use a positive number of jobs, "
             "or -1 for every CPU)"
         )
+    # More jobs than CPUs gains nothing, and a huge value makes joblib crash
+    # (OverflowError, OSError) or start thousands of worker processes. Use at
+    # most one job per CPU on this machine.
+    cpus = os.cpu_count() or 1
+    if args.jobs > cpus:
+        print(
+            f"fibermorph: --jobs {args.jobs} is more than the {cpus} CPUs on this "
+            f"machine; using --jobs {cpus}.",
+            file=sys.stderr,
+        )
+        args.jobs = cpus
 
     for option, units in (
         ("resolution_mm", args.resolution_mm_units),
@@ -221,14 +237,14 @@ def check_window_pixel_size(args):
         if args.window_unit == "px":
             if value > MAX_WINDOW_PX:
                 raise ValueError(
-                    f"argument --window_size: {value:g} px is longer than the largest "
+                    f"argument --window_size: {value:,} px is longer than the largest "
                     f"window allowed ({MAX_WINDOW_PX:,} pixels)"
                 )
         else:
             window_px = value * px_per_mm
             if window_px > MAX_WINDOW_PX:
                 raise ValueError(
-                    f"argument --window_size: {value:g} mm is {window_px:g} pixels at "
+                    f"argument --window_size: {value:.12g} mm is {window_px:,.0f} pixels at "
                     f"--resolution_mm {args.resolution_mm:g} {args.resolution_mm_units}, "
                     f"longer than the largest window allowed ({MAX_WINDOW_PX:,} pixels)"
                 )
@@ -284,7 +300,8 @@ def parse_args(argv=None):
         metavar="",
         default=1,
         help="Integer. Number of parallel jobs to run; -1 uses every CPU, 0 is not "
-        "allowed. Default is 1.",
+        "allowed, and a number larger than the machine's CPU count is reduced to it. "
+        "Default is 1.",
     )
 
     parser.add_argument(

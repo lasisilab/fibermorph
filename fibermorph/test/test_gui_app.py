@@ -449,3 +449,27 @@ def test_local_text_follows_the_configured_upload_cap(monkeypatch, set_upload_ca
     others = {"500 MB", "2 GB", "300 MB", "5 GB"} - {shown}
     page = "\n".join(_rendered_text(at))
     assert not [o for o in others if o in page], [o for o in others if o in page]
+
+
+# --- Run Remote: inputs the fibermorph CLI would refuse ---------------------
+
+def _remote_number_input(at, label):
+    (box,) = [n for n in at.number_input if n.label == label]
+    return box
+
+
+def test_run_remote_inputs_have_the_cli_lower_limits(monkeypatch):
+    at = _run_app(monkeypatch, local=False, view="remote")
+    assert _remote_number_input(at, "Min diameter (µm)").min == 0.0
+    assert _remote_number_input(at, "Max diameter (µm)").min == 1.0
+    assert _remote_number_input(at, "Taubin window (px)").min == 1
+
+
+def test_run_remote_warns_when_min_diameter_exceeds_max(monkeypatch):
+    at = _run_app(monkeypatch, local=False, view="remote")
+    assert not [w for w in at.warning if "Min diameter is larger than Max" in w.value]
+    _remote_number_input(at, "Min diameter (µm)").set_value(200.0)
+    _remote_number_input(at, "Max diameter (µm)").set_value(150.0)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert [w for w in at.warning if "Min diameter is larger than Max" in w.value]
