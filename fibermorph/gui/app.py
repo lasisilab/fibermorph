@@ -226,6 +226,20 @@ def _warn_duplicate_names(names):
 _LOCAL = os.environ.get("FIBERMORPH_LOCAL") == "1"
 
 
+def _sam2_status() -> tuple[bool, str]:
+    """(can SAM2 run in this app, reason if not). See sam2_runtime_status."""
+    from fibermorph.processing import section_sam2
+    return section_sam2.sam2_runtime_status()
+
+
+# Shown wherever SAM2 is unavailable in this app, so users know where it does run.
+_SAM2_ELSEWHERE = (
+    "To segment with SAM2, run the app on a machine with a GPU (**Run Local**, "
+    "`fibermorph-gui --local`) or generate a cluster script with SAM2 enabled "
+    "(**Run Remote**)."
+)
+
+
 def _upload_cap() -> str:
     """The upload cap Streamlit is enforcing, as text for the page ("500 MB",
     "5 GB").
@@ -442,6 +456,15 @@ if _view == "section":
         "upload, run this app locally (see **Run Local**); for a whole study on a "
         "cluster, see **Run Remote**."
     )
+    _sam2_ok, _sam2_reason = _sam2_status()
+    if not _sam2_ok:
+        # SAM2 cannot run here (e.g. the Streamlit-hosted app has no GPU): say so
+        # up front instead of letting it fall back to watershed unannounced.
+        _where = "this hosted app" if not _LOCAL else "this machine"
+        st.warning(
+            f"**SAM2 is unavailable on {_where}** ({_sam2_reason}); cross-sections "
+            "are segmented with watershed. " + _SAM2_ELSEWHERE
+        )
     st.caption(_FILENAME_NOTE)
 
     sec_source = _render_input_picker("cross-section", "sec")
@@ -457,19 +480,24 @@ if _view == "section":
         sec_max_d    = c4.number_input("Max diameter (µm)", value=150.0, step=1.0, key="sec_max_d")
         sec_res_mu   = resolution_to_px_per_unit(sec_res_val, sec_res_unit)
         st.caption(f"Working resolution: **{sec_res_mu:.4g} px/µm**")
-        sec_sam2     = st.toggle("Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2")
-        if _LOCAL:
+        sec_sam2     = st.toggle(
+            "Use SAM2 segmentation (GPU required)", value=False, key="sec_sam2",
+            disabled=not _sam2_ok,
+            help=None if _sam2_ok else f"Unavailable here: {_sam2_reason}.")
+        if not _sam2_ok:
+            # Locked off; the warning above says why and where SAM2 does run.
+            sec_sam2 = False
+            sec_ckpt = _DEFAULT_CHECKPOINT
+        elif _LOCAL:
             sec_ckpt = st.text_input("SAM2 checkpoint path", value=_DEFAULT_CHECKPOINT, key="sec_ckpt")
         else:
             # Hosted: visitors must not choose which file the server loads as a
             # model, so use the server-configured checkpoint and don't show its path.
             sec_ckpt = _DEFAULT_CHECKPOINT
-            # Only the checkpoint file is checked here; SAM2 also needs the sam2
-            # package and a CUDA GPU on the server, and without them the app
-            # uses watershed whatever the checkpoint says.
+            # Reached only when the sam2 package and a CUDA GPU are present, so
+            # the checkpoint file is the one thing left to report on.
             st.caption(
-                "SAM2 checkpoint: file found on this server. SAM2 also needs a "
-                "GPU on the server; without one the app uses watershed."
+                "SAM2 checkpoint: file found on this server."
                 if os.path.isfile(sec_ckpt) else
                 "SAM2 checkpoint: no file found on this server, so SAM2 "
                 "segmentation falls back to watershed."
@@ -866,6 +894,19 @@ elif _view == "local":
         "No GPU or cluster needed — this runs on an ordinary laptop or desktop. For "
         "a whole study on a shared HPC cluster, see the **Run Remote** tab."
     )
+    st.markdown(
+        "**SAM2 segmentation** does not run on the hosted app. To use it, run "
+        "`fibermorph-gui --local` on a machine with an NVIDIA GPU after installing "
+        "SAM2 and a checkpoint:\n\n"
+        "```bash\n"
+        "pip install git+https://github.com/facebookresearch/segment-anything-2\n"
+        "wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt\n"
+        "SAM2_CHECKPOINT=$PWD/sam2.1_hiera_tiny.pt fibermorph-gui --local\n"
+        "```\n\n"
+        "Then switch on **Use SAM2 segmentation** on the Cross-Section tab (the "
+        "checkpoint path box there can also be edited). No GPU? Use **Run Remote** "
+        "to run SAM2 on a cluster."
+    )
 
 
 # ============================================================
@@ -942,6 +983,11 @@ elif _view == "remote":
             st.warning("Min diameter is larger than Max diameter, so no cross-section "
                        "could match; fibermorph will refuse this script.")
         use_sam2        = st.toggle("Enable SAM2 segmentation (requires GPU)", value=False)
+        st.caption(
+            "SAM2 runs on the cluster's GPU node, so this works even where the app "
+            "itself can't run SAM2. The cluster environment needs the sam2 package "
+            "and a checkpoint file (see the README)."
+        )
         # This value only goes into the generated script text for another machine.
         # Hosted: don't pre-fill the server's own checkpoint path (it is not
         # useful on a cluster and visitors must not see it); leave it empty.

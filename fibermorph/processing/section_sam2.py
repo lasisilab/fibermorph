@@ -37,14 +37,41 @@ try:
 except Exception as _e:
     _SAM2_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
-# Default checkpoint paths (resolved relative to the fibermorph package root)
-_PKG_ROOT        = Path(__file__).resolve().parents[2]
-_DEFAULT_CKPT    = str(_PKG_ROOT / "checkpoints" / "sam2.1_hiera_tiny.pt")
+# Default checkpoint: fibermorph/checkpoints/ inside the package (where the
+# README and the GUI look), else checkpoints/ at the repository root (older
+# layout). SAM2_CHECKPOINT, when set, takes precedence (see _resolve_checkpoint).
+_PKG_DIR         = Path(__file__).resolve().parents[1]
+_CKPT_NAME       = "sam2.1_hiera_tiny.pt"
+_CKPT_CANDIDATES = (_PKG_DIR / "checkpoints" / _CKPT_NAME,
+                    _PKG_DIR.parent / "checkpoints" / _CKPT_NAME)
+_DEFAULT_CKPT    = str(next((p for p in _CKPT_CANDIDATES if p.exists()),
+                            _CKPT_CANDIDATES[0]))
 _DEFAULT_CFG     = "configs/sam2.1/sam2.1_hiera_t.yaml"
+
+
+def _resolve_checkpoint(checkpoint: str | None) -> str:
+    """The checkpoint to load: the one given, else SAM2_CHECKPOINT, else the default."""
+    return checkpoint or os.environ.get("SAM2_CHECKPOINT") or _DEFAULT_CKPT
 
 RESOLUTION_MU = 4.25
 _MIN_DIAM_MU  = 30.0
 _MAX_DIAM_MU  = 150.0
+
+
+def sam2_runtime_status() -> tuple[bool, str]:
+    """Whether SAM2 can run in this process, and if not, why.
+
+    Returns (True, "") when the sam2 package imports and a CUDA GPU is visible;
+    otherwise (False, reason). The checkpoint file is not checked here.
+    """
+    if not _SAM2_AVAILABLE:
+        return False, "the sam2 package is not installed"
+    try:
+        if not torch.cuda.is_available():  # noqa: F821
+            return False, "no CUDA GPU is available"
+    except Exception as exc:
+        return False, f"the GPU check failed ({type(exc).__name__})"
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +105,10 @@ def _get_sam2_generator(checkpoint: str = _DEFAULT_CKPT,
                 _sam2_init_logged = True
             return None
 
-        ckpt = checkpoint or os.environ.get("SAM2_CHECKPOINT", _DEFAULT_CKPT)
+        ckpt = _resolve_checkpoint(checkpoint)
+        # Callers (e.g. the CLI with no --sam2-cfg) may pass "" for "not set";
+        # an empty config name would make SAM2 fail to load.
+        model_cfg = model_cfg or _DEFAULT_CFG
         if not os.path.exists(ckpt):
             if not _sam2_init_logged:
                 logger.warning(f"SAM2 checkpoint not found: {ckpt} — using watershed fallback.")

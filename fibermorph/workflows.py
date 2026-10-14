@@ -70,6 +70,31 @@ def raw2gray(
     return True
 
 
+class InputFolderError(ValueError):
+    """The input folder is missing or holds no images fibermorph can read."""
+
+
+class NoResultsError(RuntimeError):
+    """Every image was read, but none gave a measurement."""
+
+
+def _require_images(input_directory) -> list:
+    """The images to analyze in ``input_directory``, or a ValueError that says why there are none."""
+    from .utils.filesystem import IMAGE_EXTENSIONS, list_images
+
+    folder = pathlib.Path(input_directory)
+    if not folder.is_dir():
+        raise InputFolderError(f"Input folder not found: {input_directory}")
+    file_list = list_images(folder)
+    logger.info(f"Found {len(file_list)} images to analyze")
+    if not file_list:
+        raise InputFolderError(
+            f"No images found in {input_directory} (subfolders included). "
+            f"fibermorph reads {' '.join(IMAGE_EXTENSIONS)} files."
+        )
+    return file_list
+
+
 def curvature(
     input_directory: Union[str, pathlib.Path],
     main_output_path: Union[str, pathlib.Path],
@@ -106,25 +131,21 @@ def curvature(
     bool
         True on success.
     """
-    from .utils.filesystem import make_subdirectory, list_images
+    from .utils.filesystem import make_subdirectory
     from .utils.timing import convert
     from .analysis.curvature_pipeline import curvature_seq
     from .analysis.parallel import tqdm_joblib
 
     total_start = timer()
 
+    # check the input before creating an (otherwise empty) output folder
+    file_list = _require_images(input_directory)
+
     # create an output directory for the analyses
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_")
     dir_name = str(timestamp + "fibermorph_curvature")
     output_path = make_subdirectory(main_output_path, append_name=dir_name)
-
-    file_list = list_images(input_directory)
-    logger.info(f"Found {len(file_list)} images to analyze")
-
-    if not file_list:
-        logger.error(f"No valid TIFF images found in {input_directory}")
-        raise ValueError(f"No valid TIFF images found in {input_directory}")
 
     with tqdm_joblib(
         tqdm(desc="curvature", total=len(file_list), unit="files", miniters=1)
@@ -148,8 +169,10 @@ def curvature(
     im_df = [df for df in im_df if df is not None]
 
     if not im_df:
-        logger.error("No images were successfully processed")
-        raise RuntimeError("No images were successfully processed")
+        raise NoResultsError(
+            f"None of the {len(file_list)} images in {input_directory} could be measured "
+            f"(see the messages above for each image)."
+        )
 
     summary_df = pd.concat(im_df)
 
@@ -206,15 +229,14 @@ def section(
     bool
         True on success.
     """
-    from .utils.filesystem import make_subdirectory, list_images
+    from .utils.filesystem import make_subdirectory
     from .utils.timing import convert
     from .analysis.section_pipeline import section_seq
     from .analysis.parallel import tqdm_joblib
 
     total_start = timer()
 
-    file_list = list_images(input_directory)
-    logger.info(f"Found {len(file_list)} images to analyze")
+    file_list = _require_images(input_directory)
 
     jetzt = datetime.now()
     timestamp = jetzt.strftime("%b%d_%H%M_")
@@ -236,6 +258,13 @@ def section(
             for f in file_list
         )
 
+    section_df = [df for df in section_df if df is not None and not df.empty]
+    if not section_df:
+        raise NoResultsError(
+            f"No cross-section was found in any of the {len(file_list)} images in "
+            f"{input_directory}. Check that --resolution_mu is in pixels per µm and "
+            f"that --minsize/--maxsize (µm) cover your sections."
+        )
     section_df = pd.concat(section_df).dropna()
     section_df.set_index("ID", inplace=True)
 

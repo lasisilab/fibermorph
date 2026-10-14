@@ -291,7 +291,8 @@ def parse_args(argv=None):
         metavar="",
         default=None,
         help="Required. Full path to and name of desired directory containing "
-        "input files.",
+        "input files. --section and --curvature read TIFF, PNG and JPEG images "
+        "(.tif .tiff .png .jpg .jpeg, any case), including subfolders.",
     )
 
     parser.add_argument(
@@ -559,7 +560,7 @@ def main(argv=None):
     """
     from .utils.filesystem import make_subdirectory
     from .utils.units import resolution_to_px_per_unit
-    from .workflows import raw2gray, curvature, section, batch
+    from .workflows import InputFolderError, NoResultsError
     from . import demo
 
     args = parse_args(argv)
@@ -579,6 +580,19 @@ def main(argv=None):
     # Check for output directory and create it if it doesn't exist
     output_dir = make_subdirectory(args.output_directory)
 
+    try:
+        _run_module(args, output_dir, resolution_mu, resolution_mm)
+    except (InputFolderError, NoResultsError) as exc:
+        # Input problems (empty or missing folder, nothing measurable) are
+        # reported as one line, not a traceback.
+        sys.exit(f"fibermorph: error: {exc}")
+
+    sys.exit(0)
+
+
+def _run_module(args, output_dir, resolution_mu, resolution_mm) -> None:
+    """Run the module chosen on the command line."""
+    from .workflows import raw2gray, curvature, section
     if args.raw2gray is True:
         raw2gray(args.input_directory, output_dir, args.file_extension, args.jobs)
     elif args.curvature is True:
@@ -608,8 +622,6 @@ def main(argv=None):
         )
     else:
         sys.exit("Error: No valid module selected")
-
-    sys.exit(0)
 
 
 if __name__ == "__main__":

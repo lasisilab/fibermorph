@@ -42,6 +42,16 @@ The sidebar console has four views:
 
 > The hosted app is upload-only (500 MB per file). To analyze larger images, run it locally — see **Run locally from source** below.
 
+### Online vs local: where SAM2 runs
+
+| | Hosted app (Streamlit) | Local GUI (`fibermorph-gui --local`) | Cluster (Run Remote SBATCH script) |
+|---|---|---|---|
+| Cross-section segmentation | watershed only — **SAM2 unavailable** (no GPU on the server) | SAM2 on a machine with an NVIDIA GPU, else watershed | SAM2 on a GPU node (`--use-sam2`), else watershed |
+| Curvature | ✓ | ✓ | ✓ |
+| Input | uploads, 500 MB cap | uploads (5 GB cap) or a folder on disk | a folder on the cluster |
+
+The app checks whether SAM2 can run where it is running (the `sam2` package plus a CUDA GPU). When it can't — always the case on the hosted app — the **Use SAM2 segmentation** switch is turned off and locked, with a one-line reason, and cross-sections are segmented with watershed. To use SAM2, run the GUI locally on a GPU machine (see [SAM2 GPU segmentation](#sam2-gpu-segmentation-optional)) or generate a cluster script in **Run Remote** with SAM2 enabled.
+
 ## 📦 Installation
 
 ### Recommended: Conda + GUI
@@ -248,7 +258,7 @@ To run the demo, you will input something like:
 `fibermorph --demo_real_section --output_directory /Users/<UserName>/<ExistingPath>/<NewFolderName`
 
 ### Curvature
-To calculate curvature from grayscale TIFF images of fibers, the flag `--curvature` is used with the following flags in addition to input and output directories:
+To calculate curvature from images of fibers (TIFF, PNG or JPEG; colour images are converted to grayscale), the flag `--curvature` is used with the following flags in addition to input and output directories:
 ```
 --resolution_mm       	Float. Number of pixels per mm for
 						curvature analysis.
@@ -285,7 +295,7 @@ fibermorph --curvature --input_directory /Users/<UserName>/<ImageFolderPath> --o
 ```
 
 ### Section
-To calculate cross-sectional properties from grayscale TIFF images of fibers, the flag `--section` is used with the following flags:
+To calculate cross-sectional properties from images of fibers (TIFF, PNG or JPEG; colour images are converted to grayscale), the flag `--section` is used with the following flags:
 ```
 --resolution_mu       Float. Number of pixels per micron for section analysis. Default is 4.25.
                       Must be greater than 0.

@@ -120,15 +120,36 @@ class TestListImages:
         assert all(p.suffix == ".tiff" for p in result)
 
     def test_list_images_with_mixed_extensions(self, tmp_path):
-        """Test listing both .tif and .tiff files."""
-        # Create test files
+        """TIFF, PNG and JPEG are all listed; other file types are not."""
+        from PIL import Image
         _make_tiff(tmp_path / "image1.tif")
         _make_tiff(tmp_path / "image2.tiff")
-        (tmp_path / "image3.jpg").touch()
+        Image.new("L", (4, 4)).save(tmp_path / "image3.png")
+        Image.new("RGB", (4, 4)).save(tmp_path / "image4.jpg")
+        Image.new("RGB", (4, 4)).save(tmp_path / "image5.jpeg")
+        Image.new("L", (4, 4)).save(tmp_path / "image6.bmp")
+        (tmp_path / "notes.txt").touch()
 
         result = list_images(tmp_path)
-        assert len(result) == 2
-        assert all(p.suffix in [".tif", ".tiff"] for p in result)
+        assert [p.name for p in result] == [
+            "image1.tif", "image2.tiff", "image3.png", "image4.jpg", "image5.jpeg"]
+
+    def test_list_images_extension_case_insensitive(self, tmp_path):
+        """Upper-case extensions from cameras and Windows (.TIF, .JPG) are listed."""
+        from PIL import Image
+        _make_tiff(tmp_path / "A.TIF")
+        Image.new("RGB", (4, 4)).save(tmp_path / "B.JPG", format="JPEG")
+        Image.new("L", (4, 4)).save(tmp_path / "C.Png", format="PNG")
+
+        result = list_images(tmp_path)
+        assert [p.name for p in result] == ["A.TIF", "B.JPG", "C.Png"]
+
+    def test_list_images_skips_invalid_jpeg_and_png(self, tmp_path):
+        """Files with an image extension that aren't real images are excluded."""
+        (tmp_path / "empty.jpg").touch()
+        (tmp_path / "corrupt.png").write_bytes(b"not a png")
+        result = list_images(tmp_path)
+        assert result == []
 
     def test_list_images_with_nested_directories(self, tmp_path):
         """Test listing images in nested directories."""

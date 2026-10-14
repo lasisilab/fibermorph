@@ -60,7 +60,7 @@ def imread(
         logger.error(f"Cannot identify image file: {input_path}")
         raise UnidentifiedImageError(
             f"Cannot identify image file '{input_path.name}'. "
-            f"Please ensure the file is a valid TIFF image."
+            f"Please ensure the file is a valid TIFF, PNG or JPEG image."
         ) from e
     except Exception as e:
         logger.error(f"Error reading image file {input_path}: {e}")

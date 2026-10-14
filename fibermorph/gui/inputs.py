@@ -15,8 +15,10 @@ from __future__ import annotations
 import os
 import re
 
-# File types the upload widgets accept (lower case, no dot).
-UPLOAD_TYPES = ["tif", "tiff", "png", "jpg", "jpeg"]
+from fibermorph.utils.filesystem import IMAGE_EXTENSIONS
+
+# File types the upload widgets accept (lower case, no dot): the same as the CLI.
+UPLOAD_TYPES = [ext.lstrip(".") for ext in IMAGE_EXTENSIONS]
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 

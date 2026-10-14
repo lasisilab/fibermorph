@@ -31,8 +31,16 @@ needs_upload_support = pytest.mark.skipif(
 )
 
 
-def _run_app(monkeypatch, local, view="section", env=None):
-    """Run the app once in hosted or local mode and return the AppTest."""
+def _run_app(monkeypatch, local, view="section", env=None, sam2_ok=None):
+    """Run the app once in hosted or local mode and return the AppTest.
+
+    sam2_ok=True/False pretends SAM2 can/cannot run (package + CUDA GPU);
+    None leaves the real check in place.
+    """
+    if sam2_ok is not None:
+        from fibermorph.processing import section_sam2
+        status = (True, "") if sam2_ok else (False, "no CUDA GPU is available")
+        monkeypatch.setattr(section_sam2, "sam2_runtime_status", lambda: status)
     if local:
         monkeypatch.setenv("FIBERMORPH_LOCAL", "1")
     else:
@@ -118,7 +126,8 @@ def test_hosted_has_no_sam2_checkpoint_text_input(monkeypatch):
 def test_local_has_sam2_checkpoint_text_input(monkeypatch, tmp_path):
     ckpt = tmp_path / "model.pt"
     ckpt.write_bytes(b"x")
-    at = _run_app(monkeypatch, local=True, env={"SAM2_CHECKPOINT": str(ckpt)})
+    at = _run_app(monkeypatch, local=True, env={"SAM2_CHECKPOINT": str(ckpt)},
+                  sam2_ok=True)
     boxes = [t for t in at.text_input if t.label == CKPT_LABEL]
     assert len(boxes) == 1
     assert boxes[0].value == str(ckpt)
@@ -128,25 +137,91 @@ def test_hosted_caption_says_checkpoint_is_found_without_showing_path(monkeypatc
     ckpt = tmp_path / "private_model_dir" / "model.pt"
     ckpt.parent.mkdir()
     ckpt.write_bytes(b"x")
-    at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(ckpt)})
+    at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(ckpt)},
+                  sam2_ok=True)
     captions = [c.value for c in at.caption if c.value.startswith("SAM2 checkpoint")]
     assert len(captions) == 1
     assert "file found on this server" in captions[0]
     assert "no file found" not in captions[0]
-    # A checkpoint file alone does not make SAM2 usable: the caption says a GPU
-    # is needed too, so it does not promise SAM2 where only a file exists.
-    assert "GPU" in captions[0] and "watershed" in captions[0]
     assert not [t for t in _rendered_text(at) if "private_model_dir" in t]
 
 
 def test_hosted_caption_says_when_no_checkpoint_file_is_found(monkeypatch, tmp_path):
     missing = tmp_path / "private_model_dir" / "absent.pt"
-    at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(missing)})
+    at = _run_app(monkeypatch, local=False, env={"SAM2_CHECKPOINT": str(missing)},
+                  sam2_ok=True)
     captions = [c.value for c in at.caption if c.value.startswith("SAM2 checkpoint")]
     assert len(captions) == 1
     assert "no file found" in captions[0]
     assert "watershed" in captions[0]
     assert "private_model_dir" not in captions[0]
+
+
+# ---------------------------------------------------------------------------
+# SAM2 unavailable (e.g. the Streamlit-hosted app has no GPU): the toggle is
+# locked off, a one-line reason is shown, and Run Local / Run Remote are named
+# as the ways to run SAM2.
+# ---------------------------------------------------------------------------
+
+SAM2_TOGGLE = "Use SAM2 segmentation (GPU required)"
+
+
+def _sam2_toggle(at):
+    [t] = [t for t in at.toggle if t.label == SAM2_TOGGLE]
+    return t
+
+
+def _sam2_warnings(at):
+    return [w.value for w in at.warning if "SAM2 is unavailable" in w.value]
+
+
+@pytest.mark.parametrize("local, where", [(False, "this hosted app"), (True, "this machine")],
+                         ids=["hosted", "local"])
+def test_sam2_unavailable_locks_toggle_and_says_why(monkeypatch, local, where):
+    at = _run_app(monkeypatch, local=local, sam2_ok=False)
+    assert _sam2_toggle(at).proto.disabled
+    assert _sam2_toggle(at).value is False
+    [msg] = _sam2_warnings(at)
+    assert f"SAM2 is unavailable on {where}" in msg
+    assert "no CUDA GPU is available" in msg
+    assert "Run Local" in msg and "fibermorph-gui --local" in msg and "Run Remote" in msg
+    # The hosted checkpoint caption is pointless when SAM2 can't run at all.
+    assert not [c for c in at.caption if c.value.startswith("SAM2 checkpoint")]
+    assert CKPT_LABEL not in _labels(at.text_input)
+
+
+def test_sam2_available_leaves_toggle_enabled_without_warning(monkeypatch):
+    at = _run_app(monkeypatch, local=False, sam2_ok=True)
+    assert not _sam2_toggle(at).proto.disabled
+    assert not _sam2_warnings(at)
+
+
+def test_real_sam2_check_without_gpu_marks_sam2_unavailable(monkeypatch):
+    # Test machines have no CUDA GPU (and usually no sam2 package), so the real
+    # check must report SAM2 as unavailable on the hosted app.
+    from fibermorph.processing import section_sam2
+    ok, reason = section_sam2.sam2_runtime_status()
+    if ok:
+        pytest.skip("this machine can run SAM2")
+    at = _run_app(monkeypatch, local=False)
+    assert _sam2_toggle(at).proto.disabled
+    [msg] = _sam2_warnings(at)
+    assert reason in msg
+
+
+def test_run_remote_keeps_sam2_toggle_when_app_cannot_run_sam2(monkeypatch):
+    # SAM2 in Run Remote only goes into the cluster script, so it stays usable.
+    at = _run_app(monkeypatch, local=False, view="remote", sam2_ok=False)
+    [t] = [t for t in at.toggle if t.label.startswith("Enable SAM2")]
+    assert not t.proto.disabled
+    assert [c for c in at.caption if "SAM2 runs on the cluster's GPU node" in c.value]
+
+
+def test_run_local_says_where_sam2_runs(monkeypatch):
+    at = _run_app(monkeypatch, local=False, view="local")
+    text = " ".join(m.value for m in at.markdown)
+    assert "SAM2 segmentation** does not run on the hosted app" in text
+    assert "SAM2_CHECKPOINT=" in text and "fibermorph-gui --local" in text
 
 
 @pytest.mark.parametrize("view", ["section", "curvature", "local", "remote"])
@@ -166,7 +241,8 @@ def test_rendered_text_helper_does_see_the_path_in_local_mode(monkeypatch, tmp_p
     # Guards the test above against passing only because the helper sees nothing.
     ckpt = tmp_path / "private_model_dir" / "model.pt"
     for view in ("section", "remote"):
-        at = _run_app(monkeypatch, local=True, view=view, env={"SAM2_CHECKPOINT": str(ckpt)})
+        at = _run_app(monkeypatch, local=True, view=view, env={"SAM2_CHECKPOINT": str(ckpt)},
+                      sam2_ok=True)
         assert [t for t in _rendered_text(at) if "private_model_dir" in t]
 
 
@@ -290,7 +366,8 @@ def test_hosted_ignores_a_client_supplied_checkpoint(monkeypatch, tmp_path, seen
 
 @needs_upload_support
 def test_local_uses_the_checkpoint_typed_in_the_box(monkeypatch, tmp_path, seen_checkpoints):
-    at = _run_app(monkeypatch, local=True, env={"SAM2_CHECKPOINT": str(tmp_path / "default.pt")})
+    at = _run_app(monkeypatch, local=True, env={"SAM2_CHECKPOINT": str(tmp_path / "default.pt")},
+                  sam2_ok=True)
     chosen = str(tmp_path / "my_model.pt")
     [t for t in at.text_input if t.label == CKPT_LABEL][0].set_value(chosen)
     at.file_uploader[0].set_value(("one.png", _section_png(100), "image/png"))

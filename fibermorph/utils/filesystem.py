@@ -79,24 +79,31 @@ def copy_if_exist(file: Union[str, pathlib.Path], directory: Union[str, pathlib.
         return False
 
 
+# Image file types the CLI reads and the GUI accepts (lower case, with the dot).
+# Images are converted to grayscale when read, so colour PNG/JPEG files work too.
+IMAGE_EXTENSIONS = (".tif", ".tiff", ".png", ".jpg", ".jpeg")
+
+
 def list_images(directory: Union[str, pathlib.Path]) -> List[pathlib.Path]:
-    """Generates a list of all .tif and/or .tiff files in a directory.
+    """Generates a list of all TIFF, PNG and JPEG images in a directory.
+
+    Extensions are matched case-insensitively (``.TIF`` and ``.JPG`` count).
 
     Parameters
     ----------
     directory : str or pathlib.Path
-        The directory in which the function will recursively search for .tif and .tiff files.
+        The directory in which the function will recursively search for images.
 
     Returns
     -------
     List[pathlib.Path]
         A list of pathlib objects with the paths to the image files.
     """
-    exts = [".tif", ".tiff"]
     mainpath = pathlib.Path(directory)
     
     # First collect all files with the right extension
-    potential_files = [p for p in pathlib.Path(mainpath).rglob("*") if p.suffix in exts]
+    potential_files = [p for p in pathlib.Path(mainpath).rglob("*")
+                       if p.suffix.lower() in IMAGE_EXTENSIONS]
     
     # Now validate each file
     valid_files = []

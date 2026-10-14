@@ -85,3 +85,16 @@ class TestImread:
         img, name = imread(img_path)
         assert isinstance(img, np.ndarray)
         assert name == "test_image"
+
+
+def test_imread_reads_png_and_colour_jpeg_as_grayscale(tmp_path):
+    """--section and --curvature accept PNG and JPEG; colour images become grayscale."""
+    from PIL import Image
+    from fibermorph.io.readers import imread
+    Image.new("L", (6, 4), 120).save(tmp_path / "gray.png")
+    Image.new("RGB", (6, 4), (200, 100, 50)).save(tmp_path / "colour.jpg", quality=95)
+    for name in ("gray.png", "colour.jpg"):
+        for use_skimage in (False, True):
+            img, stem = imread(tmp_path / name, use_skimage=use_skimage)
+            assert img.shape == (4, 6) and img.dtype.name == "uint8"
+            assert stem == name.split(".")[0]

@@ -623,3 +623,60 @@ def test_module_run_with_huge_jobs_runs_on_available_cpus(image_dir, tmp_path):
     assert "--jobs 2147483648 is more than the" in result.stderr
     (summary,) = out_dir.glob("*_fibermorph_curvature/curvature_summary_data_*.csv")
     assert list(pd.read_csv(summary)["ID"]) == ["synthetic_curv_WindowSize-50px"]
+
+
+# ---------------------------------------------------------------------------
+# Input folders with nothing to analyze: one clear line and a non-zero exit,
+# not a pandas traceback (section used to crash with "No objects to concatenate").
+# ---------------------------------------------------------------------------
+
+def _cli_error(module, in_dir, out_dir, *extra):
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main([module, "-i", str(in_dir), "-o", str(out_dir), "--jobs", "1", *extra])
+    code = excinfo.value.code
+    assert isinstance(code, str) and code.startswith("fibermorph: error: "), code
+    return code
+
+
+@pytest.mark.parametrize("module", ["--section", "--curvature"])
+def test_empty_input_folder_is_a_clear_error(tmp_path, module):
+    in_dir = tmp_path / "in"
+    in_dir.mkdir()
+    (in_dir / "notes.txt").write_text("not an image")
+    message = _cli_error(module, in_dir, tmp_path / "out")
+    assert "No images found in" in message
+    assert ".tif .tiff .png .jpg .jpeg" in message
+    # no empty, timestamped run folder is left behind
+    assert not list((tmp_path / "out").glob("*_fibermorph_*"))
+
+
+@pytest.mark.parametrize("module", ["--section", "--curvature"])
+def test_missing_input_folder_is_a_clear_error(tmp_path, module):
+    message = _cli_error(module, tmp_path / "does_not_exist", tmp_path / "out")
+    assert "Input folder not found" in message
+
+
+def test_section_with_no_section_in_any_image_is_a_clear_error(tmp_path):
+    in_dir = tmp_path / "in"
+    in_dir.mkdir()
+    Image.new("L", (400, 300), 200).save(in_dir / "blank.png")   # nothing to segment
+    message = _cli_error("--section", in_dir, tmp_path / "out", "--resolution_mu", "4.25")
+    assert "No cross-section was found in any of the 1 images" in message
+
+
+def test_section_reads_a_png_folder(tmp_path):
+    """A folder of PNGs is analyzed (it used to be treated as empty)."""
+    import numpy as np
+    from skimage import draw
+    img = np.full((600, 800), 200, np.uint8)
+    rr, cc = draw.ellipse(300, 400, 90, 130, shape=img.shape)
+    img[rr, cc] = 60
+    in_dir = tmp_path / "in"
+    in_dir.mkdir()
+    Image.fromarray(img).save(in_dir / "ellipse.png")
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--section", "-i", str(in_dir), "-o", str(tmp_path / "out"),
+                  "--jobs", "1", "--resolution_mu", "4.25", "--extended-features"])
+    assert excinfo.value.code == 0
+    (summary,) = (tmp_path / "out").glob("*_fibermorph_section/summary_section_data.csv")
+    assert list(pd.read_csv(summary)["ID"]) == ["ellipse"]
