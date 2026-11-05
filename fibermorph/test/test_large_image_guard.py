@@ -42,16 +42,88 @@ def test_hopeless_budget_gives_a_scale_below_the_minimum():
     assert imaging.curvature_scale_for_budget(3904, 5208, 150) < imaging.MIN_CURV_SCALE
 
 
-def test_budget_env_override(monkeypatch):
+def test_budget_leaves_headroom_for_the_rest_of_the_app(monkeypatch):
+    # The variable is the total the app may use; the headroom comes off it.
     monkeypatch.setenv("FIBERMORPH_MAX_MEMORY_MB", "1234")
-    assert imaging.memory_budget_mb() == 1234
+    assert imaging.memory_budget_mb() == pytest.approx(1234 - imaging.HEADROOM_MB)
+    monkeypatch.setenv("FIBERMORPH_MAX_MEMORY_MB", "100")
+    assert imaging.memory_budget_mb() == 0.0                 # never negative
+
+
+def test_garbage_override_falls_back_to_detection(monkeypatch):
     monkeypatch.setenv("FIBERMORPH_MAX_MEMORY_MB", "not a number")
-    assert imaging.memory_budget_mb() != "not a number"      # falls back to detection
+    monkeypatch.setattr(imaging, "available_memory_mb", lambda: 5000.0)
+    assert imaging.memory_budget_mb() == pytest.approx(5000 - imaging.HEADROOM_MB)
+    monkeypatch.setattr(imaging, "available_memory_mb", lambda: None)
+    assert imaging.memory_budget_mb() is None
+
+
+def test_an_image_that_fits_at_full_size_is_not_reduced_on_a_busy_machine(monkeypatch):
+    """No percentage of free memory: 5.1 MP needs 1.26 GB, so 1.6 GB free is enough."""
+    monkeypatch.delenv("FIBERMORPH_MAX_MEMORY_MB", raising=False)
+    monkeypatch.setattr(imaging, "available_memory_mb", lambda: 1600.0)
+    budget = imaging.memory_budget_mb()
+    assert imaging.curvature_scale_for_budget(1952, 2604, budget) == 1.0
 
 
 def test_available_memory_is_positive_or_unknown():
     avail = imaging.available_memory_mb()
     assert avail is None or avail >= 0
+
+
+def test_scaled_window():
+    assert imaging.scaled_window_px(50, 0.5) == 25
+    assert imaging.scaled_window_px(50, 0.1) == 10           # never below the 10 px minimum
+    assert imaging.scaled_window_px(5, 0.5) == 5             # < 10 px means the whole fragment
+
+
+# ---------------------------------------------------------------------------
+# cgroup parsing, against fake /sys/fs/cgroup trees
+# ---------------------------------------------------------------------------
+
+MB = 1048576
+
+
+def _write(root, rel, text):
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(text))
+
+
+def test_cgroup_v2_limit_on_a_parent_slice_and_cache_is_not_counted(tmp_path):
+    # Limit 4096 MB on the user slice, 1000 MB used of which 600 MB is inactive file cache.
+    _write(tmp_path, "user.slice/user-1.slice/memory.max", 4096 * MB)
+    _write(tmp_path, "user.slice/user-1.slice/memory.current", 1000 * MB)
+    _write(tmp_path, "user.slice/user-1.slice/memory.stat", f"anon 1\ninactive_file {600 * MB}\n")
+    _write(tmp_path, "user.slice/user-1.slice/session-3.scope/memory.current", 5 * MB)
+    _write(tmp_path, "user.slice/user-1.slice/session-3.scope/memory.max", "max")
+    got = imaging.cgroup_headroom_mb("0::/user.slice/user-1.slice/session-3.scope\n", str(tmp_path))
+    assert got == pytest.approx([4096 - 400])
+
+
+def test_cgroup_v1_uses_the_process_own_group_not_just_the_root(tmp_path):
+    mem = "memory"
+    _write(tmp_path, f"{mem}/memory.limit_in_bytes", 9223372036854771712)   # root: unlimited
+    _write(tmp_path, f"{mem}/memory.usage_in_bytes", 50000 * MB)
+    _write(tmp_path, f"{mem}/slurm/uid_1/job_9/memory.limit_in_bytes", 3000 * MB)
+    _write(tmp_path, f"{mem}/slurm/uid_1/job_9/memory.usage_in_bytes", 500 * MB)
+    _write(tmp_path, f"{mem}/slurm/uid_1/job_9/memory.stat", f"total_inactive_file {100 * MB}\n")
+    text = "4:cpu,cpuacct:/slurm/uid_1/job_9\n3:memory:/slurm/uid_1/job_9\n"
+    assert imaging.cgroup_headroom_mb(text, str(tmp_path)) == pytest.approx([3000 - 400])
+
+
+def test_hybrid_host_still_finds_the_v1_memory_limit(tmp_path):
+    # A 0:: line exists (v2 mounted at /unified) but memory.max does not.
+    _write(tmp_path, "unified/user.slice/cgroup.procs", "")
+    _write(tmp_path, "memory/user.slice/memory.limit_in_bytes", 2048 * MB)
+    _write(tmp_path, "memory/user.slice/memory.usage_in_bytes", 48 * MB)
+    text = "12:memory:/user.slice\n0::/user.slice\n"
+    assert imaging.cgroup_headroom_mb(text, str(tmp_path)) == pytest.approx([2000])
+
+
+def test_no_cgroup_files_means_no_limit(tmp_path):
+    assert imaging.cgroup_headroom_mb("0::/a/b\n3:memory:/a\n", str(tmp_path)) == []
+    assert imaging.cgroup_headroom_mb("", str(tmp_path)) == []
 
 
 def test_write_scaled_copy_returns_the_exact_scale(tmp_path):
@@ -67,13 +139,18 @@ def test_write_scaled_copy_returns_the_exact_scale(tmp_path):
 # In the GUI
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("streamlit")
-from streamlit.testing.v1 import AppTest  # noqa: E402
+try:
+    from streamlit.testing.v1 import AppTest
 
-import fibermorph.gui  # noqa: E402
-from pathlib import Path  # noqa: E402
+    import fibermorph.gui
+    from pathlib import Path
 
-APP_PATH = str(Path(fibermorph.gui.__file__).parent / "app.py")
+    HAVE_STREAMLIT = True
+except ImportError:                                    # the guard tests above need no GUI
+    HAVE_STREAMLIT = False
+
+if HAVE_STREAMLIT:
+    APP_PATH = str(Path(fibermorph.gui.__file__).parent / "app.py")
 
 
 def _fiber_png(size=1000):
@@ -92,11 +169,12 @@ def _run_curvature(monkeypatch, budget_mb, auto_reduce=True):
     if budget_mb is None:
         monkeypatch.delenv("FIBERMORPH_MAX_MEMORY_MB", raising=False)
     else:
-        monkeypatch.setenv("FIBERMORPH_MAX_MEMORY_MB", str(budget_mb))
+        monkeypatch.setenv("FIBERMORPH_MAX_MEMORY_MB", str(budget_mb + imaging.HEADROOM_MB))
     at = AppTest.from_file(APP_PATH, default_timeout=180)
     at.session_state["active_view"] = "curvature"
     at.run()
-    at.checkbox(key="curv_auto_reduce").set_value(auto_reduce)
+    if auto_reduce is not None:
+        at.checkbox(key="curv_auto_reduce").set_value(auto_reduce)
     at.file_uploader[0].set_value(("fiber.png", _fiber_png(), "image/png"))
     at.run()
     [b for b in at.button if b.key == "curv_run"][0].click()
@@ -106,7 +184,8 @@ def _run_curvature(monkeypatch, budget_mb, auto_reduce=True):
 
 
 needs_upload_support = pytest.mark.skipif(
-    not hasattr(AppTest, "file_uploader"), reason="AppTest cannot simulate uploads")
+    not HAVE_STREAMLIT or not hasattr(AppTest, "file_uploader"),
+    reason="streamlit or AppTest upload support is missing")
 
 
 @needs_upload_support
@@ -147,7 +226,30 @@ def test_image_that_cannot_fit_even_at_a_quarter_is_refused_with_a_message(monke
 
 
 @needs_upload_support
+def test_reduction_is_off_by_default_and_the_warning_points_to_the_checkbox(monkeypatch):
+    at = _run_curvature(monkeypatch, budget_mb=320, auto_reduce=None)
+    assert at.checkbox(key="curv_auto_reduce").value is False
+    [msg] = [w.value for w in at.warning if "will probably be killed" in w.value]
+    assert "fiber.png" in msg and "Reduce very large images" in msg
+    assert "analysis_scale" not in at.session_state["curvature_summary"].columns
+
+
+@needs_upload_support
 def test_reduction_can_be_turned_off(monkeypatch):
     at = _run_curvature(monkeypatch, budget_mb=320, auto_reduce=False)
     assert any("will probably be killed" in w.value for w in at.warning)
     assert "analysis_scale" not in at.session_state["curvature_summary"].columns
+
+
+@needs_upload_support
+def test_reduced_warning_stays_after_a_rerun_and_says_which_way_values_move(monkeypatch):
+    at = _run_curvature(monkeypatch, budget_mb=320)
+    at.run()                                            # e.g. clicking a download button
+    [msg] = [w.value for w in at.warning if "Reduced to fit in memory" in w.value]
+    assert "more* curved" in msg and "do not compare" in msg
+
+
+@needs_upload_support
+def test_refused_image_gets_the_memory_message_not_the_resolution_hint(monkeypatch):
+    at = _run_curvature(monkeypatch, budget_mb=205)
+    assert not any("Check the **Resolution**" in w.value for w in at.warning)
