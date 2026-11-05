@@ -61,9 +61,12 @@ def downsample_to_resolution(
 CURV_MB_BASE = 200.0
 CURV_MB_PER_MP = 210.0
 
-# Share of the memory that is actually free that one analysis may plan to use;
-# the rest is left for Streamlit, the uploaded file and the other widgets.
-MEMORY_SHARE = 0.6
+# Memory (MB) kept back from the estimate for everything else the app holds while an
+# analysis runs: Streamlit itself, the uploaded files and the result tables. What is
+# left is what one curvature analysis may plan to use. A fixed allowance, not a share
+# of the free memory, so an image that would finish at full size is not reduced just
+# because the machine is busy.
+HEADROOM_MB = 300.0
 
 # Below this linear scale (a quarter of the width and height) the fibers are only
 # a pixel or two wide and the curvature is no longer meaningful, so an image that
@@ -85,14 +88,67 @@ def _read_int(path: str):
         return None
 
 
+def _read_stat(path: str, key: str):
+    """One counter from a cgroup ``memory.stat`` file, or None."""
+    try:
+        with open(path) as fh:
+            for line in fh:
+                name, _, value = line.partition(" ")
+                if name == key:
+                    return int(value)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+# (mount directories to try, limit file, usage file, file-cache counter in memory.stat)
+_CGROUP_V2 = (("", "/unified"), "memory.max", "memory.current", "inactive_file")
+_CGROUP_V1 = (("/memory",), "memory.limit_in_bytes", "memory.usage_in_bytes", "total_inactive_file")
+
+
+def cgroup_headroom_mb(cgroup_text: str, root: str = "/sys/fs/cgroup") -> list:
+    """Limit minus usage (MB) for every memory limit that applies to a process.
+
+    ``cgroup_text`` is the content of ``/proc/self/cgroup``. Both layouts are read:
+    cgroup v2 (a ``0::path`` line) and v1 (a ``N:memory:path`` line), so hybrid hosts,
+    where the v2 line exists but the memory controller is still v1, are covered. Each
+    group from the process's own up to the root is checked, since a limit can sit on
+    any level (a login-node user slice, a Slurm job, a container). Usage excludes the
+    inactive file cache, which the kernel gives back under pressure, so copying files
+    does not make the budget shrink.
+    """
+    out = []
+    for line in cgroup_text.splitlines():
+        hierarchy, _, rest = line.partition(":")
+        controllers, _, path = rest.partition(":")
+        if hierarchy == "0" and controllers == "":
+            layout = _CGROUP_V2
+        elif "memory" in controllers.split(","):
+            layout = _CGROUP_V1
+        else:
+            continue
+        mounts, limit_name, used_name, cache_key = layout
+        parts = [p for p in path.split("/") if p]
+        for mount in mounts:
+            for depth in range(len(parts) + 1):
+                base = root + mount + "".join("/" + p for p in parts[:depth])
+                limit = _read_int(f"{base}/{limit_name}")
+                used = _read_int(f"{base}/{used_name}")
+                if limit is None or used is None or limit >= 1 << 60:
+                    continue    # no limit on this level (v1 reports a huge number)
+                used -= _read_stat(f"{base}/memory.stat", cache_key) or 0
+                out.append((limit - used) / 1048576.0)
+    return out
+
+
 def available_memory_mb() -> float | None:
     """Memory (MB) this process can still use, or None if it cannot be determined.
 
-    The smallest of: free memory on the machine (``MemAvailable``) and, for every
-    cgroup level from this process's group up to the root, the limit minus the
-    current usage. cgroups are what cap login-node sessions, Slurm jobs and
-    containers such as Streamlit Cloud, so a machine with plenty of RAM but a
-    small per-user cap is reported correctly.
+    The smallest of: free memory on the machine (``MemAvailable``) and the room left
+    under every cgroup limit that applies (:func:`cgroup_headroom_mb`). cgroups are
+    what cap login-node sessions, Slurm jobs and containers such as Streamlit Cloud,
+    so a machine with plenty of RAM but a small per-user cap is reported correctly.
+    Only Linux is detected; elsewhere the result is None and no limit is applied.
     """
     candidates = []
     try:
@@ -106,23 +162,9 @@ def available_memory_mb() -> float | None:
 
     try:
         with open("/proc/self/cgroup") as fh:
-            lines = fh.read().splitlines()
+            candidates.extend(cgroup_headroom_mb(fh.read()))
     except OSError:
-        lines = []
-    v2 = next((ln.split(":", 2)[2] for ln in lines if ln.startswith("0::")), None)
-    if v2 is not None:
-        parts = [p for p in v2.split("/") if p]
-        for depth in range(len(parts) + 1):
-            base = "/sys/fs/cgroup/" + "/".join(parts[:depth])
-            limit = _read_int(base.rstrip("/") + "/memory.max")
-            used = _read_int(base.rstrip("/") + "/memory.current")
-            if limit is not None and used is not None:
-                candidates.append((limit - used) / 1048576.0)
-    else:  # cgroup v1
-        limit = _read_int("/sys/fs/cgroup/memory/memory.limit_in_bytes")
-        used = _read_int("/sys/fs/cgroup/memory/memory.usage_in_bytes")
-        if limit is not None and used is not None and limit < 1 << 60:
-            candidates.append((limit - used) / 1048576.0)
+        pass
 
     return max(0.0, min(candidates)) if candidates else None
 
@@ -130,19 +172,36 @@ def available_memory_mb() -> float | None:
 def memory_budget_mb() -> float | None:
     """Memory (MB) one curvature analysis may plan to use; None means no limit known.
 
-    The environment variable FIBERMORPH_MAX_MEMORY_MB overrides the detection
-    (for example on a host that hides its limit).
+    The memory the process can still use, less ``HEADROOM_MB`` for the rest of the
+    app. The environment variable FIBERMORPH_MAX_MEMORY_MB sets the total memory the
+    app may use (for example on a host that hides its limit); the same allowance is
+    taken off it.
     """
     import os
 
+    total = None
     override = os.environ.get("FIBERMORPH_MAX_MEMORY_MB")
     if override:
         try:
-            return float(override)
+            total = float(override)
         except ValueError:
             pass
-    avail = available_memory_mb()
-    return None if avail is None else MEMORY_SHARE * avail
+    if total is None:
+        total = available_memory_mb()
+    return None if total is None else max(0.0, total - HEADROOM_MB)
+
+
+def scaled_window_px(window_px: int, scale: float) -> int:
+    """Taubin window (px) to use on an image shrunk by ``scale``.
+
+    A window under 10 px means "fit the whole fragment" and is kept as it is.
+    Otherwise the window shrinks with the image but never below 10 px, the shortest
+    sliding window the curvature code accepts, so for a short window on a strongly
+    reduced image the window covers a longer stretch of fiber than requested.
+    """
+    if window_px < 10:
+        return int(window_px)
+    return max(10, round(window_px * scale))
 
 
 def curvature_scale_for_budget(height: int, width: int, budget_mb: float | None) -> float:

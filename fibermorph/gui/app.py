@@ -207,21 +207,29 @@ def _process_curvature_gui(
     return fragments
 
 
-def _prepare_curvature_input(path, resolution_mm, window_size, auto_reduce, tmpdir, index):
-    """Shrink one curvature image if it would not fit in memory.
+class _ImageTooLarge(ValueError):
+    """An image that cannot be analyzed within the available memory (not a bad image)."""
+
+
+def _prepare_curvature_input(path, name, resolution_mm, window_size, auto_reduce, tmpdir, index,
+                             notices):
+    """Shrink one curvature image if it would not fit in memory and the user allowed it.
 
     Curvature analysis needs about 200 MB + 210 MB per megapixel at its peak (the
     4.4 GB that a 5208 x 3904 scan needs gets the process killed on a login node
-    or a hosted app). When the estimate is more than the memory this process can
-    use, the image is shrunk by the factor that fits, and the resolution (px/mm)
-    and the Taubin window (px) are scaled with it, so the physical scale of the
-    measurement is unchanged. Images that fit are analyzed at full resolution,
-    exactly as before.
+    or a hosted app). Images are analyzed at full size unless the estimate is more
+    than the memory this process can use. Then, only if ``auto_reduce`` is on, the
+    image is shrunk by the factor that fits, and the resolution (px/mm) and the
+    Taubin window (px) are scaled with it so lengths and curvature stay in mm and
+    mm^-1. That is not the same measurement as at full size: the ridge filter, the
+    skeleton and the circle fit still work in whole pixels, so values move, most
+    visibly for straight or gently curved fibers (see the warning in the app).
 
     Returns ``(path, resolution_mm, window_size, info)``. ``info`` is None for a
-    full-resolution analysis, else a dict with the scale and sizes. Raises
-    ``ValueError`` (with a message for the user) if even a quarter-size image
-    would not fit.
+    full-resolution analysis, else a dict with the scale and sizes. A message for
+    the user is appended to ``notices`` when the image needs more memory than is
+    available and is not reduced. Raises ``_ImageTooLarge`` (with a message for the
+    user) if even a quarter-size image would not fit.
     """
     from PIL import Image
     from fibermorph.utils import imaging
@@ -238,26 +246,28 @@ def _prepare_curvature_input(path, resolution_mm, window_size, auto_reduce, tmpd
     if scale >= 1.0:
         return path, resolution_mm, window_size, None
     if not auto_reduce:
-        st.warning(
-            f"This {width} × {height} px image needs about {need_mb / 1000:.1f} GB of "
+        notices.append(
+            f"**{name}** ({width} × {height} px) needs about {need_mb / 1000:.1f} GB of "
             f"memory and only about {budget_mb / 1000:.1f} GB is available, so the "
-            "analysis will probably be killed. Turn on **Reduce very large images** "
-            "in Settings, or use **Run Local** / **Run Remote** on a machine with more memory."
-        )
+            "analysis will probably be killed. Turn on **Reduce very large images** in "
+            "the Settings above (values then differ from a full-size analysis), or use "
+            "**Run Local** / **Run Remote** on a machine with more memory.")
         return path, resolution_mm, window_size, None
     if scale < imaging.MIN_CURV_SCALE:
-        raise ValueError(
-            f"This {width} × {height} px image needs about {need_mb / 1000:.1f} GB of memory "
+        raise _ImageTooLarge(
+            f"**{name}** ({width} × {height} px) needs about {need_mb / 1000:.1f} GB of memory "
             f"and only about {budget_mb / 1000:.1f} GB is available, so it would have to be "
-            f"shrunk to {scale:.0%} of its size, which is too small to measure curvature. "
-            "Run it with **Run Local** on a machine with more memory, or with **Run Remote**."
-        )
+            f"shrunk to {scale:.0%} of its width and height, which is too small to measure "
+            "curvature. Run it with **Run Local** on a machine with more memory, or with "
+            "**Run Remote**.")
 
     small_path = os.path.join(tmpdir, f"reduced_{index:04d}.tif")
     eff, (new_w, new_h) = imaging.write_scaled_copy(path, small_path, scale)
-    return small_path, resolution_mm * eff, max(10, round(window_size * eff)), {
-        "scale": eff, "from_px": (width, height), "to_px": (new_w, new_h),
-        "resolution_mm": resolution_mm * eff, "window_px": max(10, round(window_size * eff)),
+    window_px = imaging.scaled_window_px(window_size, eff)
+    return small_path, resolution_mm * eff, window_px, {
+        "name": name, "scale": eff, "from_px": (width, height), "to_px": (new_w, new_h),
+        "resolution_mm": resolution_mm * eff, "window_px": window_px,
+        "window_changed": window_px != round(window_size * eff),
         "need_mb": need_mb, "budget_mb": budget_mb,
     }
 
@@ -747,13 +757,15 @@ elif _view == "curvature":
         curv_res_mm   = resolution_to_px_per_unit(curv_res_val, curv_res_unit)
         st.caption(f"Working resolution: **{curv_res_mm:.4g} px/mm**")
         curv_auto_reduce = st.checkbox(
-            "Reduce very large images automatically so they fit in memory",
-            value=True, key="curv_auto_reduce",
+            "Reduce very large images so they fit in memory",
+            value=False, key="curv_auto_reduce",
             help="Curvature analysis of a 20-megapixel scan needs about 4.5 GB of memory. "
-                 "If an image needs more than this app can use, it is shrunk just enough to "
-                 "fit, and the resolution and window are scaled with it (the output then says "
-                 "so). Images that fit are never changed. Turn this off to always analyze at "
-                 "full size; the app may then be stopped by the system.")
+                 "By default every image is analyzed at full size, and the app may be stopped "
+                 "by the system if it does not fit. Turn this on to shrink only the images that "
+                 "need more memory than this app can use, just enough to fit, with the "
+                 "resolution and window scaled along. The values then differ from a full-size "
+                 "analysis: straight or gently curved fibers tend to read as more curved. "
+                 "Use it for a quick look, not for results you will report.")
         from fibermorph.utils import imaging as _imaging
         _budget = _imaging.memory_budget_mb()
         if _budget is not None:
@@ -762,6 +774,7 @@ elif _view == "curvature":
                        f"enough for images up to about **{_fit_mp:.1f} megapixels** at full size.")
 
     if st.button("▶ Analyze curvature", type="primary", key="curv_run"):
+        st.session_state.pop("curvature_notices", None)
         if _source_is_empty(curv_source):
             st.error("Provide at least one curvature image.")
         else:
@@ -771,7 +784,8 @@ elif _view == "curvature":
                 frag_frames = []
                 summ_rows   = []
                 failed      = []
-                reduced     = {}
+                reduced     = []
+                notices     = []
                 progress = st.progress(0, text="Processing…")
                 for idx, (name, path) in enumerate(curv_inputs):
                     progress.progress(idx / len(curv_inputs),
@@ -779,18 +793,21 @@ elif _view == "curvature":
                     info = None
                     try:
                         use_path, use_res, use_window, info = _prepare_curvature_input(
-                            path, float(curv_res_mm), int(curv_window),
-                            bool(curv_auto_reduce), tmpdir, idx)
+                            path, name, float(curv_res_mm), int(curv_window),
+                            bool(curv_auto_reduce), tmpdir, idx, notices)
                         frags = _process_curvature_gui(
                             use_path,
                             resolution_mm=use_res,
                             window_size=use_window,
                         )
+                    except _ImageTooLarge as e:
+                        notices.append(str(e))
+                        continue
                     except Exception as e:
                         st.warning(f"{name}: {inputs.restore_names(e, path, name)}")
                         frags = None
                     if info is not None:
-                        reduced[name] = info
+                        reduced.append(info)
 
                     if frags is not None and not frags.empty:
                         f = frags.copy()
@@ -815,19 +832,25 @@ elif _view == "curvature":
                 progress.progress(1.0, text="Done.")
 
             if reduced:
-                lines = [
-                    f"- **{n}**: {i['from_px'][0]} × {i['from_px'][1]} px → "
-                    f"{i['to_px'][0]} × {i['to_px'][1]} px (×{i['scale']:.2f}); analyzed at "
-                    f"{i['resolution_mm']:.4g} px/mm with a {i['window_px']} px window"
-                    for n, i in reduced.items()]
-                st.warning(
+                lines = []
+                for i in reduced:
+                    line = (f"- **{i['name']}**: {i['from_px'][0]} × {i['from_px'][1]} px → "
+                            f"{i['to_px'][0]} × {i['to_px'][1]} px (×{i['scale']:.2f}); analyzed at "
+                            f"{i['resolution_mm']:.4g} px/mm with a {i['window_px']} px window")
+                    if i["window_changed"]:
+                        line += " (the shortest window the analysis allows, so longer than requested)"
+                    lines.append(line)
+                notices.insert(0,
                     "**Reduced to fit in memory.** These images needed more memory than this "
-                    f"app can use (about {next(iter(reduced.values()))['budget_mb'] / 1000:.1f} GB), so "
-                    "they were shrunk before analysis. Lengths and curvature are still in mm and "
-                    "mm⁻¹, but thin fibers are measured at lower resolution, so the values can "
-                    "differ from a full-size analysis (the `analysis_scale` column records the "
-                    "factor). For full-resolution results use **Run Local** on a machine with "
-                    "more memory, or **Run Remote**.\n\n" + "\n".join(lines))
+                    f"app can use (about {reduced[0]['budget_mb'] / 1000:.1f} GB), so they were "
+                    "shrunk before analysis. Lengths and curvature are still in mm and mm⁻¹, "
+                    "but the values are **not** the same as at full size: the analysis works in "
+                    "whole pixels, so straight or gently curved fibers tend to read as *more* "
+                    "curved, and with a short window gentle arcs can read as less curved. The "
+                    "`analysis_scale` column records the factor; do not compare these values "
+                    "with full-size ones. For full-resolution results use **Run Local** on a "
+                    "machine with more memory, or **Run Remote**.\n\n" + "\n".join(lines))
+            st.session_state["curvature_notices"] = notices
 
             if failed:
                 st.warning(
@@ -840,12 +863,19 @@ elif _view == "curvature":
                 st.session_state.pop("curvature_summary", None)
                 st.error("No curvature fragments were measured.")
             else:
-                st.session_state["curvature_fragments"] = pd.concat(
-                    frag_frames, ignore_index=True)
-                st.session_state["curvature_summary"] = pd.DataFrame(summ_rows)
+                frag_all = pd.concat(frag_frames, ignore_index=True)
+                summ_all = pd.DataFrame(summ_rows)
+                if "analysis_scale" in frag_all.columns:     # mixed batch: full-size rows are 1
+                    frag_all["analysis_scale"] = frag_all["analysis_scale"].fillna(1.0)
+                    summ_all["analysis_scale"] = summ_all["analysis_scale"].fillna(1.0)
+                st.session_state["curvature_fragments"] = frag_all
+                st.session_state["curvature_summary"] = summ_all
                 n_frag = int(sum(len(f) for f in frag_frames))
                 st.success(f"Measured {n_frag} fragment(s) across "
                            f"{len(summ_rows)} / {len(curv_inputs)} image(s).")
+
+    for _notice in st.session_state.get("curvature_notices", []):
+        st.warning(_notice)    # kept in the session so it stays after a rerun (e.g. a download)
 
     frag_df = st.session_state.get("curvature_fragments")
     summ_df = st.session_state.get("curvature_summary")
@@ -873,6 +903,7 @@ elif _view == "curvature":
             "length":      "Length (mm)",
             "curv_mean":   "Mean Curvature (mm⁻¹)",
             "curv_median": "Median Curvature (mm⁻¹)",
+            "analysis_scale": "Analysis scale",
         }
         fpresent = {k: v for k, v in frag_cols.items() if k in frag_df.columns}
         st.dataframe(
@@ -901,6 +932,7 @@ elif _view == "curvature":
                 "length_mean":       "Mean Length (mm)",
                 "length_median":     "Median Length (mm)",
                 "length_total":      "Total Length (mm)",
+                "analysis_scale":    "Analysis scale",
             }
             spresent = {k: v for k, v in summ_labels.items() if k in summ_df.columns}
             fmt = {v: "{:.4f}" for k, v in spresent.items()
