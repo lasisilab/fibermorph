@@ -52,6 +52,34 @@ The sidebar console has four views:
 
 The app checks whether SAM2 can run where it is running (the `sam2` package plus a CUDA GPU). When it can't — always the case on the hosted app — the **Use SAM2 segmentation** switch is turned off and locked, with a one-line reason, and cross-sections are segmented with watershed. To use SAM2, run the GUI locally on a GPU machine (see [SAM2 GPU segmentation](#sam2-gpu-segmentation-optional)) or generate a cluster script in **Run Remote** with SAM2 enabled.
 
+### Large curvature images and memory
+
+Curvature analysis of a 20-megapixel scan (for example 5208 × 3904 px) needs about **4.5 GB of memory** at its
+peak (roughly 200 MB + 210 MB per megapixel), almost all of it in the ridge-filter step. That is more than a
+shared login node (a 4 GiB cap per user on Great Lakes) or a hosted app has, and the system then kills the app
+with no message. Before each curvature image the GUI checks the memory it can actually use (the cgroup limit,
+cgroup v1 or v2, or the machine's free memory; Linux only, other systems get no check) and keeps 300 MB back for
+the rest of the app. **By default every image is analyzed at full size.** If one needs more memory than is
+available, the page names the file and says so, and points to the option below.
+
+**Reduce very large images so they fit in memory** (checkbox in the Curvature view's **Settings** expander, off by
+default) shrinks only the images that do not fit, just enough to fit (to a minimum of a quarter of the width and
+height), and scales the **resolution (px/mm) and the Taubin window (px)** with them. Lengths and curvature stay in
+mm and mm⁻¹, and the page and the CSVs say so (an `analysis_scale` column, 1 for images that were not reduced).
+**The values are not the same as at full size.** The ridge filter, the skeleton and the circle fit work in whole
+pixels, so a smaller image changes them: on a straight line tilted 17° the measured curvature rose from 0.02 mm⁻¹
+at full size to 0.03, 0.04, 0.06 and 0.16 mm⁻¹ at 0.76, 0.55, 0.4 and 0.25 of the size, and a gentle arc
+(radius 10 mm) fell from 0.075 to 0.025 mm⁻¹ over the same range. Use the option for a quick look; for results that
+go in a paper, run the full-size image on a machine with enough memory (**Run Local** on a compute node, or
+**Run Remote**). A window under 10 px (whole-fragment fit) is left alone; a longer window never shrinks below
+10 px. If an image would have to shrink below a quarter of its size, it is not analyzed and the message says how
+much memory it needs.
+
+Set the environment variable `FIBERMORPH_MAX_MEMORY_MB` to the total memory the app may use (for example on a host
+that hides its limit); the 300 MB allowance is taken off it. Two sessions in one Streamlit process each see the
+same free memory and do not coordinate. Cross-section images are always analyzed at about 2 px/µm, so they need far
+less memory.
+
 ## 📦 Installation
 
 ### Recommended: Conda + GUI

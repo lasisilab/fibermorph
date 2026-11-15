@@ -213,6 +213,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pipeline now emits a single per-image table.
 
 ### Fixed
+- **The GUI no longer crashes on large curvature images.** Analyzing a 20-megapixel scan needs about
+  4.5 GB of memory at its peak (in the ridge filter), so on a login node (4 GiB cap), a small Slurm job or a
+  hosted app the process was killed with `Killed` or a connection timeout. Before each curvature image the GUI
+  now estimates the peak memory (about 200 MB + 210 MB per megapixel) against the memory the process can use
+  (the cgroup v1 or v2 limit of the process's own group and every parent, less the reclaimable file cache, and
+  the machine's free memory, less a 300 MB allowance; `FIBERMORPH_MAX_MEMORY_MB` sets the total instead). Images
+  are analyzed at full size by default. One that does not fit gets a message naming the file. The new Settings
+  checkbox **Reduce very large images** (off by default) shrinks only such images just enough to fit, with the
+  resolution and the window scaled along, and says so (a warning that stays on the page and an `analysis_scale`
+  column, 1 for images that were not reduced). Reduced values are not equal to full-size ones: straight or gently
+  curved fibers tend to read as more curved, and the warning says so. Below a quarter of the original width and
+  height the image is refused with a message instead of producing meaningless values.
 - **`--use-sam2` now runs SAM2.** The section pipeline passed `""` for an unset
   `--sam2-cfg`, which overrode the default model config, so SAM2 failed to load
   ("Cannot find primary config ''") and every image fell back to watershed, even
